@@ -44,16 +44,31 @@
 9. **async_example.c** - Async watcher 示例
    - 演示如何使用 ev_async 从其他线程触发事件循环中的回调
    - 适合用于线程间通信
+
+10. **child_example.c** - 子进程监控示例
+   - 演示如何使用 ev_child 监控子进程状态变化
+   - 可以捕获子进程的退出状态和信号
+
+11. **fork_example.c** - Fork 事件示例
+   - 演示如何使用 ev_fork 捕获 fork 系统调用后的回调
+   - 适合用于需要在 fork 后重新初始化的场景
+
+12. **embed_example.c** - 多事件示例（嵌入循环概念的演示）
+   - 演示如何在同一事件循环中处理多个不同的事件
+   - 作为嵌入循环功能的替代方案，展示了多事件处理的概念
+   - 运行两个不同间隔的定时器，展示了事件循环的并发处理能力
+   - 演示如何使用 ev_async 从其他线程触发事件循环中的回调
+   - 适合用于线程间通信
    - 演示如何使用 ev_cleanup 在事件循环退出前执行清理工作
    - 适合用于资源释放和清理操作
 
 ### 综合示例
 
-10. **mixed_example.c** - 混合 watcher 示例
+13. **mixed_example.c** - 混合 watcher 示例
    - 演示如何在一个程序中同时使用多种类型的 watcher
    - 展示不同类型 watcher 之间的协作
 
-11. **echo_server.c** - 回显服务器示例
+14. **echo_server.c** - 回显服务器示例
     - 实现了一个简单的 TCP 回显服务器
     - 综合使用 I/O watcher 处理客户端连接
 
@@ -97,9 +112,13 @@ gcc -Wall -I../.. -L../.. -lev -o io_example io_example.c
 5. prepare_check_example - 理解事件循环的各个阶段
 6. stat_example - 学习文件系统事件
 7. cleanup_example - 学习资源清理
-8. signal_example - 学习信号处理
-9. mixed_example - 综合运用多种 watcher
-10. echo_server - 实际应用案例
+8. async_example - 学习线程间通信
+9. child_example - 学习子进程监控
+10. fork_example - 学习 fork 事件处理
+11. embed_example - 学习多事件处理概念
+12. signal_example - 学习信号处理
+13. mixed_example - 综合运用多种 watcher
+14. echo_server - 实际应用案例
 
 ## 更多信息
 
