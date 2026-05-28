@@ -5,12 +5,14 @@
 ## 🔄 代码结构（重构版本）
 
 ### 公共代码
+
 ```
 io_common.h    - 公共函数声明
 io_common.c    - 公共函数实现
 ```
 
 ### 特定机制代码
+
 ```
 select_example.c    - Select 特有逻辑（端口 8888）
 poll_example.c      - Poll 特有逻辑（端口 8889）
@@ -19,6 +21,7 @@ kqueue_example.c    - kqueue 特有逻辑（端口 8891）
 ```
 
 ### 配置文件
+
 ```
 Makefile      - 编译脚本
 test_io.sh    - 自动化测试脚本
@@ -29,17 +32,18 @@ README.io     - 本文件
 
 ### 代码简化
 
-| 文件 | 重构前行数 | 重构后行数 | 减少量 |
-|------|-----------|-----------|--------|
-| `select_example.c` | ~200 | ~150 | -25% |
-| `poll_example.c` | ~200 | ~150 | -25% |
-| `epoll_example.c` | ~200 | ~140 | -30% |
-| `kqueue_example.c` | ~200 | ~160 | -20% |
-| **总计** | **~800** | **~600** | **-25%** |
+| 文件                 | 重构前行数     | 重构后行数     | 减少量         |
+| -------------------- | -------------- | -------------- | -------------- |
+| `select_example.c` | ~200           | ~150           | -25%           |
+| `poll_example.c`   | ~200           | ~150           | -25%           |
+| `epoll_example.c`  | ~200           | ~140           | -30%           |
+| `kqueue_example.c` | ~200           | ~160           | -20%           |
+| **总计**       | **~800** | **~600** | **-25%** |
 
 ### 公共函数
 
 所有示例共用以下功能：
+
 - `io_set_nonblocking()` - 设置非阻塞模式
 - `io_create_server_socket()` - 创建服务器 socket
 - `io_getClientAddrStr()` - 获取客户端地址
@@ -52,21 +56,25 @@ README.io     - 本文件
 每个示例专注于自己的 IO 机制：
 
 **Select 特有**：
+
 - `fd_set` 位图管理
 - `get_max_fd()` 函数
 - 手动维护 `readfds`
 
 **Poll 特有**：
+
 - `struct pollfd` 数组
 - `add_poll_fd()` / `remove_poll_fd()`
 - 事件掩码处理
 
 **Epoll 特有**：
+
 - `epoll_ctl()` 操作
 - 边缘触发（EPOLLET）
 - 批量事件获取
 
 **kqueue 特有**：
+
 - `kevent()` 事件过滤
 - 事件类型（EVFILT_READ 等）
 - 事件数据统计
@@ -74,12 +82,14 @@ README.io     - 本文件
 ## 📦 编译和使用
 
 ### 编译所有示例
+
 ```bash
 cd examples/io
 make
 ```
 
 ### 编译单个示例
+
 ```bash
 make select_example
 make poll_example
@@ -88,6 +98,7 @@ make kqueue_example
 ```
 
 ### 清理编译文件
+
 ```bash
 make clean
 ```
@@ -108,21 +119,23 @@ Hello
 
 ### 比较不同机制
 
-| 机制 | 文件大小 | 特殊特性 | 学习要点 |
-|------|---------|----------|----------|
-| **Select** | 最小 | 位图管理、FD 限制 | 基础概念 |
-| **Poll** | 较小 | 无 FD 限制 | 中等规模 |
-| **Epoll** | 中等 | 边缘触发、高并发 | 高性能 |
-| **kqueue** | 较小 | 多事件类型、优雅设计 | BSD/macOS |
+| 机制             | 文件大小 | 特殊特性             | 学习要点  |
+| ---------------- | -------- | -------------------- | --------- |
+| **Select** | 最小     | 位图管理、FD 限制    | 基础概念  |
+| **Poll**   | 较小     | 无 FD 限制           | 中等规模  |
+| **Epoll**  | 中等     | 边缘触发、高并发     | 高性能    |
+| **kqueue** | 较小     | 多事件类型、优雅设计 | BSD/macOS |
 
 ## 🧪 测试脚本
 
 使用自动化测试脚本：
+
 ```bash
 ./test_io.sh
 ```
 
 这会：
+
 1. 编译所有示例
 2. 检查程序启动
 3. 显示测试方法
@@ -147,6 +160,7 @@ Hello
 ## 🔧 代码学习路径
 
 ### 初学者路径
+
 1. **从 select 开始**：概念简单，容易理解
 2. **学习 poll**：解决 FD 限制问题
 3. **根据平台**：
@@ -154,6 +168,7 @@ Hello
    - macOS/BSD: 学习 kqueue
 
 ### 进阶路径
+
 - 比较不同机制的输出信息
 - 理解事件传递差异
 - 实验边缘触发 vs 水平触发
@@ -199,6 +214,7 @@ kevent(kq, NULL, 0, events, MAX, &timeout);
 ## 🎯 学习重点
 
 ### 公共部分（理解一次即可）
+
 - TCP 服务器创建
 - 非阻塞 IO 设置
 - Echo 服务实现
@@ -206,12 +222,14 @@ kevent(kq, NULL, 0, events, MAX, &timeout);
 - 资源清理
 
 ### 机制特定部分（需要对比学习）
+
 - FD 管理方式
 - 事件检测机制
 - 性能差异
 - 平台限制
 
 ### 重构学习（实战技能）
+
 - 代码复用技巧
 - 接口设计
 - 模块化编程
@@ -222,34 +240,38 @@ kevent(kq, NULL, 0, events, MAX, &timeout);
 基于公共代码，可以轻松扩展：
 
 1. **添加 HTTP 支持**
+
    - 修改 `io_handle_client_data()` 解析 HTTP
    - 保持 IO 机制不变
-
 2. **添加 SSL/TLS**
+
    - 使用公共的 IO 函数
    - 在 `io_create_server_socket()` 后启用 SSL
-
 3. **添加连接池**
+
    - 在 `io_handle_client_data()` 添加客户端管理系统
    - 所有机制通用
-
 4. **性能统计**
+
    - 在公共函数中添加统计
    - 比较不同机制性能
 
 ## ⚠️ 注意事项
 
 ### 平台兼容性
+
 - Epoll 仅限 Linux
 - kqueue 仅限 BSD/macOS
 - Select/Poll 跨平台
 
 ### 性能考虑
+
 - 小规模（<100 FD）：Select 足够
 - 中等规模（100-1000 FD）：Poll 良好
 - 大规模（>1000 FD）：Epoll/kqueue
 
 ### 编译顺序
+
 ```bash
 # 先编译公共代码，再编译各个示例
 make clean
@@ -266,6 +288,7 @@ make all  # 会自动处理依赖关系
 ## 🎓 总结
 
 通过这次重构：
+
 - ✅ 代码量减少 25%
 - ✅ 消除重复逻辑
 - ✅ 便于维护和扩展
@@ -277,11 +300,13 @@ make all  # 会自动处理依赖关系
 ## 编译
 
 ###编译所有示例：
+
 ```bash
 make
 ```
 
 ###编译单个示例：
+
 ```bash
 make select_example
 make poll_example
@@ -290,6 +315,7 @@ make kqueue_example
 ```
 
 ###清理编译文件：
+
 ```bash
 make clean
 ```
@@ -299,6 +325,7 @@ make clean
 每个示例都是独立的服务器程序，监听不同的端口。建议在一个终端运行服务器，另一个终端使用 `nc` 测试。
 
 ### Select 示例
+
 ```bash
 # 终端 1: 运行服务器
 ./select_example
@@ -310,6 +337,7 @@ nc localhost 8888
 ```
 
 ### Poll 示例
+
 ```bash
 # 终端 1: 运行服务器
 ./poll_example
@@ -319,6 +347,7 @@ nc localhost 8889
 ```
 
 ### Epoll 示例（仅限 Linux）
+
 ```bash
 # 终端 1: 运行服务器
 ./epoll_example
@@ -328,6 +357,7 @@ nc localhost 8890
 ```
 
 ### kqueue 示例
+
 ```bash
 # 终端 1: 运行服务器
 ./kqueue_example
@@ -370,16 +400,17 @@ nc localhost 8891
 
 ## 平台兼容性
 
-| 示例 | Linux | macOS (BSD) | 说明 |
-|------|-------|------------|------|
-| select_example | ✅ | ✅ | 所有 Unix 平台 |
-| poll_example | ✅ | ✅ | 大多数 Unix 平台 |
-| epoll_example | ✅ | ❌ | 仅 Linux |
-| kqueue_example | ❌ | ✅ | BSD/macOS |
+| 示例           | Linux | macOS (BSD) | 说明             |
+| -------------- | ----- | ----------- | ---------------- |
+| select_example | ✅    | ✅          | 所有 Unix 平台   |
+| poll_example   | ✅    | ✅          | 大多数 Unix 平台 |
+| epoll_example  | ✅    | ❌          | 仅 Linux         |
+| kqueue_example | ❌    | ✅          | BSD/macOS        |
 
 ## 测试方法
 
 ### 基础测试
+
 ```bash
 # 连接服务器并发送消息
 echo "Hello World" | nc localhost 8888
@@ -390,6 +421,7 @@ nc localhost 8888
 ```
 
 ### 并发连接测试
+
 ```bash
 # 使用多个 nc 实例同时连接
 nc localhost 8888 &  # 后台运行
@@ -402,6 +434,7 @@ echo "Message 2" > /proc/$(pgrep nc | tail -1)/fd/1
 ```
 
 ### 压力测试（简单）
+
 ```bash
 # 使用脚本创建多个连接
 for i in {1..10}; do
@@ -412,21 +445,25 @@ done
 ## 代码特点
 
 ### Select 示例
+
 - 使用 `fd_set` 位图管理 FD
 - 遵循经典 select 模式
 - 展示 FD_SET/FD_ISSET 的使用
 
 ### Poll 示例
+
 - 使用 `struct pollfd` 数组
 - 动态管理 FD 集合
 - 支持任意数量的 FD
 
 ### Epoll 示例
+
 - 使用边缘触发（EPOLLET）
 - 展示 `epoll_wait` 的批处理能力
 - O(1) 复杂度
 
 ### kqueue 示例
+
 - 使用 `struct kevent`
 - 展示 kevent 的事件过滤机制
 - 支持多种事件类型
@@ -445,18 +482,22 @@ done
 ## 学习要点
 
 ### 1. 非阻塞 IO
+
 所有示例都使用非阻塞 socket，这是高性能服务的基础。
+
 ```c
 set_nonblocking(fd);
 ```
 
 ### 2. 事件循环
+
 每种机制都有类似的循环模式：
+
 ```c
 while (running) {
     // 等待事件
     ret = mechanism_wait(...);
-    
+  
     // 处理就绪事件
     for (i = 0; i < ret; i++) {
         // 处理事件
@@ -465,24 +506,31 @@ while (running) {
 ```
 
 ### 3. 错误处理
+
 包括信号中断（EINTR）、连接关闭、读写错误等。
 
 ### 4. 资源管理
+
 正确的 FD 关闭和清理。
 
 ## 常见问题
 
 ### Q: 为什么 epoll 在 macOS 上无法编译？
+
 A: Epoll 是 Linux 特有的系统调用，macOS 使用 kqueue。
 
 ### Q: 如何处理大量的并发连接？
+
 A: 在 Linux 上使用 epoll，在 macOS 上使用 kqueue。
 
 ### Q: 这些示例能处理多少连接？
+
 A: 理论上非常取决于配置，默认选择可以轻松处理上千连接。
 
 ### Q: 如何修改端口？
+
 A:编辑源码中的端口号常量：
+
 ```c
 #define SERVER_PORT 8888  // 修改这里
 ```
