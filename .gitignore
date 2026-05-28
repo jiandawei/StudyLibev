@@ -63,6 +63,11 @@ examples/*/echo_server
 Thumbs.db
 *.sublime-*
 
+# macOS 调试符号文件
+*.dSYM/
+*.dSYM/Contents/Resources/DWARF/*
+*.dSYM/Contents/Resources/Relocations/*
+
 # 操作系统文件
 .DS_Store
 .AppleDouble  
