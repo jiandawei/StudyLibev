@@ -259,29 +259,29 @@ struct ev_loop;
 /* event类别，用于eventmask, revents, events...，通常用于按位或来添加event */
 /* eventmask, revents, events... */
 enum {
-  EV_UNDEF    = (int)0xFFFFFFFF, /* guaranteed to be invalid */
-  EV_NONE     =            0x00, /* no events */
-  EV_READ     =            0x01, /* ev_io detected read will not block */
-  EV_WRITE    =            0x02, /* ev_io detected write will not block */
-  EV__IOFDSET =            0x80, /* internal use only */
-  EV_IO       =         EV_READ, /* alias for type-detection */
-  EV_TIMER    =      0x00000100, /* timer timed out */
+  EV_UNDEF    = (int)0xFFFFFFFF, /* 无效值 */ /* guaranteed to be invalid */
+  EV_NONE     =            0x00, /* 无事件 */ /* no events */
+  EV_READ     =            0x01, /* IO 读就绪 */ /* ev_io detected read will not block */
+  EV_WRITE    =            0x02, /* IO 写就绪 */ /* ev_io detected write will not block */
+  EV__IOFDSET =            0x80, /* 内部标记 */ /* internal use only */
+  EV_IO       =         EV_READ, /* IO 类型检测别名 */ /* alias for type-detection */
+  EV_TIMER    =      0x00000100, /* 定时器超时 */ /* timer timed out */
 #if EV_COMPAT3
   EV_TIMEOUT  =        EV_TIMER, /* pre 4.0 API compatibility */
 #endif
-  EV_PERIODIC =      0x00000200, /* periodic timer timed out */
-  EV_SIGNAL   =      0x00000400, /* signal was received */
-  EV_CHILD    =      0x00000800, /* child/pid had status change */
-  EV_STAT     =      0x00001000, /* stat data changed */
-  EV_IDLE     =      0x00002000, /* event loop is idling */
-  EV_PREPARE  =      0x00004000, /* event loop about to poll */
-  EV_CHECK    =      0x00008000, /* event loop finished poll */
-  EV_EMBED    =      0x00010000, /* embedded event loop needs sweep */
-  EV_FORK     =      0x00020000, /* event loop resumed in child */
-  EV_CLEANUP  =      0x00040000, /* event loop resumed in child */
-  EV_ASYNC    =      0x00080000, /* async intra-loop signal */
-  EV_CUSTOM   =      0x01000000, /* for use by user code */
-  EV_ERROR    = (int)0x80000000  /* sent when an error occurs */
+  EV_PERIODIC =      0x00000200, /* 周期性定时器 */ /* periodic timer timed out */
+  EV_SIGNAL   =      0x00000400, /* 信号到达 */ /* signal was received */
+  EV_CHILD    =      0x00000800, /* 子进程状态变化 */ /* child/pid had status change */
+  EV_STAT     =      0x00001000, /* 文件状态变化 */ /* stat data changed */
+  EV_IDLE     =      0x00002000, /* 事件循环空闲 */ /* event loop is idling */
+  EV_PREPARE  =      0x00004000, /* 即将进入 IO 等待 */ /* event loop about to poll */
+  EV_CHECK    =      0x00008000, /* 刚完成 IO 等待 */ /* event loop finished poll */
+  EV_EMBED    =      0x00010000, /* 嵌入循环需要扫描 */ /* embedded event loop needs sweep */
+  EV_FORK     =      0x00020000, /* fork 后子进程恢复 */ /* event loop resumed in child */
+  EV_CLEANUP  =      0x00040000, /* 事件循环销毁 */ /* event loop resumed in child */
+  EV_ASYNC    =      0x00080000, /* 跨线程异步信号 */ /* async intra-loop signal */
+  EV_CUSTOM   =      0x01000000, /* 用户自定义事件 */ /* for use by user code */
+  EV_ERROR    = (int)0x80000000  /* 错误发生 */ /* sent when an error occurs */
 };
 
 /* can be used to add custom fields to all watchers, while losing binary compatibility */
@@ -330,10 +330,10 @@ enum {
 /* shared by all watchers */
 /* 所有watcher都拥有的成员 */
 #define EV_WATCHER(type)			\
-  int active; /* private */			\
-  int pending; /* private */			\
-  EV_DECL_PRIORITY /* private */		\
-  EV_COMMON /* rw */ /* 存放自定义数据 */ \       
+  int active; /* private */ /* 是否正在监听 */ \
+  int pending; /* private */ /* 是否在pending队列等待调度 */ \
+  EV_DECL_PRIORITY /* private */ /* watcher的优先级 */ \
+  EV_COMMON /* rw */ /* 存放自定义数据 */ \
   EV_CB_DECLARE (type) /* event 发生时的 callback */ /* private */ 
 
 /* 所有watcher链表节点都拥有的成员 */
@@ -374,8 +374,8 @@ typedef struct ev_io
 {
   EV_WATCHER_LIST (ev_io)
 
-  int fd;     /* ro */
-  int events; /* ro */
+  int fd;     /* ro */ // 监听的文件描述符
+  int events; /* ro */ // 监听的事件类型（EV_READ, EV_WRITE）
 } ev_io;
 
 /* invoked after a specific time, repeatable (based on monotonic clock) */
@@ -390,14 +390,20 @@ typedef struct ev_timer
 
 /* invoked at some specific time, possibly repeating at regular intervals (based on UTC) */
 /* revent EV_PERIODIC */
-/* 相对定时器（某个时间点超时） */
+/* 绝对定时器（某个时间点超时） */
+/*
+模式	           设置方式	                        行为
+绝对时间	        ev_periodic_set(&w, at, 0, 0)	 只在 at 时间点触发一次
+offset/interval	ev_periodic_set(&w, 0, 3600, 0)	在 offset 之后，每 interval 秒触发一次（如每小时整点）
+reschedule_cb	  ev_periodic_set(&w, 0, 0, cb)	  每次触发后调用 cb，由回调决定下次时间
+*/
 typedef struct ev_periodic
 {
   EV_WATCHER_TIME (ev_periodic)
 
   ev_tstamp offset; /* rw */
   ev_tstamp interval; /* rw */
-  ev_tstamp (*reschedule_cb)(struct ev_periodic *w, ev_tstamp now) EV_THROW; /* rw */
+  ev_tstamp (*reschedule_cb)(struct ev_periodic *w, ev_tstamp now) EV_THROW; /* rw */ // reschedule_cb 是 ev_periodic 三种调度模式之一，用于自定义下次触发时间
 } ev_periodic;
 
 /* invoked when the given signal has been received */
@@ -439,11 +445,11 @@ typedef struct ev_stat
 {
   EV_WATCHER_LIST (ev_stat)
 
-  ev_timer timer;     /* private */
-  ev_tstamp interval; /* ro */
-  const char *path;   /* ro */
-  ev_statdata prev;   /* ro */
-  ev_statdata attr;   /* ro */
+  ev_timer timer;     /* private */ /* 定时器，用于定时检测文件stat */
+  ev_tstamp interval; /* ro */      /* 定时器间隔，每隔interval就检查 */
+  const char *path;   /* ro */      /* 文件路径 */
+  ev_statdata prev;   /* ro */      /* 文件属性 old */
+  ev_statdata attr;   /* ro */      /* 文件属性 new */
 
   int wd; /* wd for inotify, fd for kqueue */
 } ev_stat;
@@ -452,7 +458,7 @@ typedef struct ev_stat
 #if EV_IDLE_ENABLE
 /* invoked when the nothing else needs to be done, keeps the process from blocking */
 /* revent EV_IDLE */
-/*。event loop空闲触发事件 */
+/* event loop空闲触发事件 */
 typedef struct ev_idle
 {
   EV_WATCHER (ev_idle)
@@ -462,7 +468,7 @@ typedef struct ev_idle
 /* invoked for each run of the mainloop, just before the blocking call */
 /* you can still change events in any way you like */
 /* revent EV_PREPARE */
-/* event loop之前事件？？？ */
+/* 每次loop之前需要执行的 */
 typedef struct ev_prepare
 {
   EV_WATCHER (ev_prepare)
@@ -470,7 +476,7 @@ typedef struct ev_prepare
 
 /* invoked for each run of the mainloop, just after the blocking call */
 /* revent EV_CHECK */
-/* event loop之后事件？？？ */
+/* event loop之后需要执行的watcher？？？ */
 typedef struct ev_check
 {
   EV_WATCHER (ev_check)

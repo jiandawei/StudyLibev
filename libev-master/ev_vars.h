@@ -51,6 +51,7 @@ VARx(ev_tstamp, rtmn_diff)    /* 实时时间与单调时间的差值（用于�
 /* ========================================
    事件反转（reverse feeding）相关字段
    用于在事件处理过程中反向触发事件
+   其实只用于存放超时timer watcher
    ======================================== */
 
 VARx(W *, rfeeds)             /* 反向事件投递队列：存储需要反向触发的 watcher 指针数组 */
@@ -65,14 +66,13 @@ VARx(int, rfeedcnt)           /* 反向事件队列的当前元素数量 */
 VAR (pendings, ANPENDING *pendings [NUMPRI])              /* 每个优先级的待处理事件数组（5 个优先级：-2 到 +2），二维数组：pendings[NUMPRI][pendingmax]*/
 VAR (pendingmax, int pendingmax [NUMPRI])                 /* 每个优先级队列的最大容量 */
 VAR (pendingcnt, int pendingcnt [NUMPRI])                 /* 每个优先级队列的当前待处理事件数量 */
-VARx(int, pendingpri)                                      /* 当前最高的待处理优先级 */
-VARx(ev_prepare, pending_w)                               /* 临时的 pending watcher（用于 pending 机制）*/
+VARx(int, pendingpri)                                     /* 当前最高的待处理优先级，后面处理pending队列，从pendingpri优先级开始处理 */
+VARx(ev_prepare, pending_w)                               /* 1. 指向prepare；2. 指向临时的 pending watcher（用于 pending 机制）*/
 
 /* ========================================
    阻塞时间相关字段
    控制事件循环的阻塞行为
    ======================================== */
-
 VARx(ev_tstamp, io_blocktime)                          /* IO 操作的阻塞时间（最小休眠时间）*/
 VARx(ev_tstamp, timeout_blocktime)                     /* 超时操作的阻塞时间（最小休眠时间）*/
 
@@ -81,47 +81,60 @@ VARx(ev_tstamp, timeout_blocktime)                     /* 超时操作的阻塞�
    管理底层 IO 多路复用机制
    ======================================== */
 
-VARx(int, backend)                                      /* 当前使用的后端类型（select/poll/epoll/kqueue/port 等）*/
-VARx(int, activecnt)                                   /* 活跃事件总数（引用计数）*/
-VARx(EV_ATOMIC_T, loop_done)                           /* 循环退出标志（由 ev_break 设置）*/
+VARx(int, backend)            /* 当前使用的后端类型（select/poll/epoll/kqueue/port 等）*/
+VARx(int, activecnt)          /* 活跃watcher总数*/
+VARx(EV_ATOMIC_T, loop_done)  /* 循环退出标志（由 ev_break 设置）*/
 
-VARx(int, backend_fd)                                  /* 后端文件描述符（如 epoll_create 的返回值）*/
-VARx(ev_tstamp, backend_mintime)                       /* 后端的典型定时器分辨率（防止过短的阻塞）*/
-VAR (backend_modify, void (*backend_modify)(EV_P_ int fd, int oev, int nev))  /* 修改后端监控事件的函数指针。oev：old events，nev：new events */
-VAR (backend_poll  , void (*backend_poll)(EV_P_ ev_tstamp timeout))         /* 后端轮询等待事件的函数指针 */
+VARx(int, backend_fd)                                                          /* 后端文件描述符（如 epoll_create 的返回值）*/
+VARx(ev_tstamp, backend_mintime)                                               /* 后端的典型定时器分辨率（防止过短的阻塞）*/
+VAR (backend_modify, void (*backend_modify)(EV_P_ int fd, int oev, int nev))   /* 修改后端监控事件的函数指针。oev：old events，nev：new events */
+VAR (backend_poll  , void (*backend_poll)(EV_P_ ev_tstamp timeout))            /* 后端轮询等待事件的函数指针 */
 
 /* ========================================
    文件描述符（fd）管理相关字段
    管理所有监控的文件描述符
    ======================================== */
-
-VARx(ANFD *, anfds)                                     /* 文件描述符信息数组：每个 fd 对应的 watcher 链表 */
-VARx(int, anfdmax)                                      /* 文件描述符数组的最大容量（已分配的 fd 数量）*/
+VARx(ANFD *, anfds) /* fd信息数组：每个 fd 对应的 watcher 链表 */
+VARx(int, anfdmax)  /* fd数组的最大容量（已分配的 fd 数量）*/
 
 /* ========================================
    管道（pipe）相关字段
    用于跨线程或异步通知
    ======================================== */
+/* 管道数组：[0] 读端（读端：事件循环阻塞在 poll/epoll 时，靠读端唤醒自己），[1] 写端（写端：ev_async_send、信号处理等场景，往写端写 1 个字节，唤醒循环）*/
+VAR (evpipe, int evpipe [2])
+/* 监控管道读端的 IO watcher */
+VARx(ev_io, pipe_w)
 
-VAR (evpipe, int evpipe [2])                           /* 管道数组：[0] 读端，[1] 写端，用于跨线程通信 */
-VARx(ev_io, pipe_w)                                    /* 监控管道读端的 IO watcher */
-VARx(EV_ATOMIC_T, pipe_write_wanted)                   /* 标志：是否希望写入管道（原子操作）*/
-VARx(EV_ATOMIC_T, pipe_write_skipped)                   /* 标志：是否跳过了管道写入（原子操作）*/
+/*
+### ipe_write_wanted 主循环说 ："我马上要进入 backend_poll 等待了，如果有人想写 pipe 唤醒我，请直接写。"
+- 谁设置 ：主循环（ ev_run ）
+- 设置时机 ：进入 backend_poll 之前
+- 清除时机 ： backend_poll 返回之后
+- 含义 ：主循环正在等待 IO 事件，可以被 pipe 唤醒
+### pipe_write_skipped 信号处理函数说 ："我有事件要通知主循环，但主循环没在等待，写 pipe 没用，先记下来。"
+- 谁设置 ：信号处理函数 / 工作线程（ evpipe_write ）
+- 设置时机 ：有信号/异步事件需要通知，但主循环没在 backend_poll 中
+- 清除时机 ：实际写 pipe 成功，或主循环检测到后处理
+- 含义 ：有被跳过的事件通知，需要补发
+*/
+/* 标志：是否需要写pipe，此时需要唤醒loop（原子操作）*/
+VARx(EV_ATOMIC_T, pipe_write_wanted)
+/* 标志：是否可以跳过pipe写操作，因为当前loop没有阻塞，不需要通过写pipe唤醒loop（原子操作）*/      
+VARx(EV_ATOMIC_T, pipe_write_skipped)
 
 /* ========================================
    进程 ID 相关字段
    用于检测 fork
    ======================================== */
-
 #if !defined(_WIN32) || EV_GENWRAP
-VARx(pid_t, curpid)                                    /* 当前进程 ID（用于检测 fork）*/
+VARx(pid_t, curpid)  /* 当前进程 ID（用于检测 fork）*/
 #endif
 
 /* ========================================
    Fork 处理相关字段
    ======================================== */
-
-VARx(char, postfork)                                   /* 标志：是否在 fork 后需要重新创建内核状态 */
+VARx(char, postfork)  /* fork标志,为1时子进程需要重新创建内核状态（避免与父进程的混用） */
 
 #if EV_USE_SELECT || EV_GENWRAP
 /* ========================================
@@ -192,72 +205,65 @@ VARx(HANDLE, iocp)                                      /* IOCP 端口句柄 */
 
 /* ========================================
    文件描述符变更管理相关字段
-   跟踪需要更新后端状态的 fd
+   跟踪需要更新后端状态的 fd （主要是更新监听事件）
    ======================================== */
-
-VARx(int *, fdchanges)                                  /* 需要变更的 fd 数组 */
-VARx(int, fdchangemax)                                  /* fdchanges 数组最大容量 */
-VARx(int, fdchangecnt)                                  /* fdchanges 数组当前数量 */
+VARx(int *, fdchanges)   /* 需要变更的 fd 数组 */
+VARx(int, fdchangemax)   /* fdchanges 数组最大容量 */
+VARx(int, fdchangecnt)   /* fdchanges 数组当前数量 */
 
 /* ========================================
-   定时器（timer watcher）相关字段
+   相对定时器（timer watcher）相关字段
    使用最小堆管理
    ======================================== */
-
-VARx(ANHE *, timers)                                    /* 定时器堆数组（按触发时间排序的最小堆）*/
-VARx(int, timermax)                                     /* timers 数组最大容量 */
-VARx(int, timercnt)                                     /* timers 数组当前数量 */
+VARx(ANHE *, timers)   /* 定时器堆数组（按触发时间排序的最小堆）*/
+VARx(int, timermax)    /* timers 数组最大容量 */
+VARx(int, timercnt)    /* timers 数组当前数量 */
 
 /* ========================================
-   周期性定时器（periodic watcher）相关字段
+   绝对定时器（periodic watcher）相关字段
    使用最小堆管理
    ======================================== */
-
 #if EV_PERIODIC_ENABLE || EV_GENWRAP
-VARx(ANHE *, periodics)                                 /* 周期性定时器堆数组 */
-VARx(int, periodicmax)                                  /* periodics 数组最大容量 */
-VARx(int, periodiccnt)                                  /* periodics 数组当前数量 */
+VARx(ANHE *, periodics)  /* 周期性定时器堆数组 */
+VARx(int, periodicmax)   /* periodics 数组最大容量 */
+VARx(int, periodiccnt)   /* periodics 数组当前数量 */
 #endif
 
 /* ========================================
    Idle watcher 相关字段
    事件循环空闲时触发
    ======================================== */
-
 #if EV_IDLE_ENABLE || EV_GENWRAP
-VAR (idles, ev_idle **idles [NUMPRI])                   /* 每个优先级的 idle watcher 指针数组 */
-VAR (idlemax, int idlemax [NUMPRI])                     /* 每个优先级 idle 数组的最大容量 */
-VAR (idlecnt, int idlecnt [NUMPRI])                     /* 每个优先级 idle 数组的当前数量 */
+VAR (idles, ev_idle **idles [NUMPRI]) /* 每个优先级的 idle watcher 指针数组（二维数组，第一维：优先级） */
+VAR (idlemax, int idlemax [NUMPRI])   /* 每个优先级 idle 数组的最大容量 */
+VAR (idlecnt, int idlecnt [NUMPRI])   /* 每个优先级 idle 数组的当前数量 */
 #endif
-VARx(int, idleall)                                      /* 所有 idle watcher 总数 */
+VARx(int, idleall)                    /* 所有 idle watcher 总数 */
 
 /* ========================================
    Prepare watcher 相关字段
    每次循环迭代开始前触发
    ======================================== */
-
-VARx(struct ev_prepare **, prepares)                     /* prepare watcher 指针数组 */
-VARx(int, preparemax)                                   /* prepares 数组最大容量 */
-VARx(int, preparecnt)                                   /* prepares 数组当前数量 */
+VARx(struct ev_prepare **, prepares)  /* prepare watcher 指针数组 */
+VARx(int, preparemax)                 /* prepares 数组最大容量 */
+VARx(int, preparecnt)                 /* prepares 数组当前数量 */
 
 /* ========================================
    Check watcher 相关字段
    每次循环迭代结束后触发
    ======================================== */
-
-VARx(struct ev_check **, checks)                        /* check watcher 指针数组 */
-VARx(int, checkmax)                                     /* checks 数组最大容量 */
-VARx(int, checkcnt)                                     /* checks 数组当前数量 */
+VARx(struct ev_check **, checks)  /* check watcher 指针数组 */
+VARx(int, checkmax)               /* checks 数组最大容量 */
+VARx(int, checkcnt)               /* checks 数组当前数量 */
 
 /* ========================================
    Fork watcher 相关字段
    子进程中触发
    ======================================== */
-
 #if EV_FORK_ENABLE || EV_GENWRAP
-VARx(struct ev_fork **, forks)                          /* fork watcher 指针数组 */
-VARx(int, forkmax)                                      /* forks 数组最大容量 */
-VARx(int, forkcnt)                                      /* forks 数组当前数量 */
+VARx(struct ev_fork **, forks)  /* fork watcher 指针数组 */
+VARx(int, forkmax)              /* forks 数组最大容量 */
+VARx(int, forkcnt)              /* forks 数组当前数量 */
 #endif
 
 /* ========================================
@@ -266,51 +272,47 @@ VARx(int, forkcnt)                                      /* forks 数组当前数
    ======================================== */
 
 #if EV_CLEANUP_ENABLE || EV_GENWRAP
-VARx(struct ev_cleanup **, cleanups)                    /* cleanup watcher 指针数组 */
-VARx(int, cleanupmax)                                   /* cleanups 数组最大容量 */
-VARx(int, cleanupcnt)                                   /* cleanups 数组当前数量 */
+VARx(struct ev_cleanup **, cleanups)  /* cleanup watcher 指针数组 */
+VARx(int, cleanupmax)                 /* cleanups 数组最大容量 */
+VARx(int, cleanupcnt)                 /* cleanups 数组当前数量 */
 #endif
 
 /* ========================================
    Async watcher 相关字段
    跨线程异步通知
    ======================================== */
-
 #if EV_ASYNC_ENABLE || EV_GENWRAP
-VARx(EV_ATOMIC_T, async_pending)                        /* async watcher 待处理标志（原子操作）*/
-VARx(struct ev_async **, asyncs)                        /* async watcher 指针数组 */
-VARx(int, asyncmax)                                     /* asyncs 数组最大容量 */
-VARx(int, asynccnt)                                     /* asyncs 数组当前数量 */
+VARx(EV_ATOMIC_T, async_pending)  /* async watcher 待处理标志（原子操作）*/
+VARx(struct ev_async **, asyncs)  /* async watcher 指针数组 */
+VARx(int, asyncmax)               /* asyncs 数组最大容量 */
+VARx(int, asynccnt)               /* asyncs 数组当前数量 */
 #endif
 
 /* ========================================
    文件系统监听（inotify）相关字段
    Linux 特有的文件监听
    ======================================== */
-
 #if EV_USE_INOTIFY || EV_GENWRAP
-VARx(int, fs_fd)                                        /* inotify 文件描述符 */
-VARx(ev_io, fs_w)                                       /* 监控 inotify fd 的 IO watcher */
-VARx(char, fs_2625)                                    /* 标志：是否运行在 Linux 2.6.25 或更新版本 */
-VAR (fs_hash, ANFS fs_hash [EV_INOTIFY_HASHSIZE])       /* 文件系统监听的哈希表 */
+VARx(int, fs_fd)                                     /* inotify 文件描述符 */
+VARx(ev_io, fs_w)                                    /* 监控 inotify fd 的 IO watcher */
+VARx(char, fs_2625)                                  /* 标志：是否运行在 Linux 2.6.25 或更新版本 */
+VAR (fs_hash, ANFS fs_hash [EV_INOTIFY_HASHSIZE])    /* 文件系统监听的哈希表 */
 #endif
 
 /* ========================================
    信号处理相关字段
    ======================================== */
-
-VARx(EV_ATOMIC_T, sig_pending)                          /* 信号待处理标志（原子操作）*/
+VARx(EV_ATOMIC_T, sig_pending)     /* 信号待处理标志（原子操作）*/
 #if EV_USE_SIGNALFD || EV_GENWRAP
-VARx(int, sigfd)                                        /* signalfd 文件描述符 */
-VARx(ev_io, sigfd_w)                                    /* 监控 signalfd 的 IO watcher */
-VARx(sigset_t, sigfd_set)                              /* signalfd 使用的信号集 */
+VARx(int, sigfd)                   /* signalfd 文件描述符 */
+VARx(ev_io, sigfd_w)               /* 监控 signalfd 的 IO watcher */
+VARx(sigset_t, sigfd_set)          /* signalfd 使用的信号集 */
 #endif
 
 /* ========================================
    循环配置相关字段
    ======================================== */
-
-VARx(unsigned int, origflags)                           /* 原始循环标志（创建时传入的参数）*/
+VARx(unsigned int, origflags)  /* 原始循环标志（创建时传入的参数）*/
 
 /* ========================================
    高级 API（EV_FEATURE_API）相关字段
@@ -329,4 +331,3 @@ VAR (invoke_cb , ev_loop_callback invoke_cb)            /* 待处理事件调用
 #endif
 
 #undef VARx  /* 取消 VARx 宏定义，避免污染后续代码 */
-

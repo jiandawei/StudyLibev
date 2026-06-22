@@ -1,0 +1,7 @@
+{
+	"InstallScripts" : 
+	[
+		"/Users/dawei.jian/Desktop/libev/libev-master/examples/lock_free/build/cmake_install.cmake"
+	],
+	"Parallel" : false
+}

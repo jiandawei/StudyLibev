@@ -267,14 +267,18 @@ epoll_destroy (EV_P)
   array_free (epoll_eperm, EMPTY);
 }
 
+// 
 void inline_size
 epoll_fork (EV_P)
 {
+  // 关闭父进程的backend fd
   close (backend_fd);
 
+  // 创建子进程的backend fd
   while ((backend_fd = epoll_create (256)) < 0)
     ev_syserr ("(libev) epoll_create");
 
+  // 设置 FD_CLOEXEC
   fcntl (backend_fd, F_SETFD, FD_CLOEXEC);
 
   fd_rearm_all (EV_A);

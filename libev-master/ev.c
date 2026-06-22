@@ -1679,12 +1679,14 @@ ev_printerr (const char *msg)
 
 static void (*syserr_cb)(const char *msg) EV_THROW;
 
+// 设置系统调用报错处理函数
 void ecb_cold
 ev_set_syserr_cb (void (*cb)(const char *msg) EV_THROW) EV_THROW
 {
   syserr_cb = cb;
 }
 
+// 系统调用报错处理函数
 static void noinline ecb_cold
 ev_syserr (const char *msg)
 {
@@ -1767,10 +1769,10 @@ ev_realloc (void *ptr, long size)
 /* file descriptor info structure */
 typedef struct
 {
-  WL head;
-  unsigned char events; /* the events watched for */
-  unsigned char reify;  /* flag set when this ANFD needs reification (EV_ANFD_REIFY, EV__IOFDSET) */
-  unsigned char emask;  /* the epoll backend stores the actual kernel mask in here */
+  WL head;              // 监听该fd的watcher list
+  unsigned char events; // fd对应watcher的event集合 /* the events watched for */
+  unsigned char reify;  // ？？？ /* flag set when this ANFD needs reification (EV_ANFD_REIFY, EV__IOFDSET) */
+  unsigned char emask;  // epoll专用 /* the epoll backend stores the actual kernel mask in here */
   unsigned char unused;
 #if EV_USE_EPOLL
   unsigned int egen;    /* generation counter to counter epoll bugs */
@@ -1802,6 +1804,7 @@ typedef struct
 /* Heap Entry */
 #if EV_HEAP_CACHE_AT
   /* a heap element */
+  /* 最小堆节点，按照超时时间排序 */
   typedef struct {
     ev_tstamp at;
     WT w;
@@ -1821,6 +1824,7 @@ typedef struct
 
 #if EV_MULTIPLICITY
 
+  // event loop的结构体
   struct ev_loop
   {
     ev_tstamp ev_rt_now;
@@ -1860,6 +1864,7 @@ typedef struct
 /*****************************************************************************/
 
 #ifndef EV_HAVE_EV_TIME
+// 获取当前时间
 ev_tstamp
 ev_time (void) EV_THROW
 {
@@ -1867,17 +1872,18 @@ ev_time (void) EV_THROW
   if (expect_true (have_realtime))
     {
       struct timespec ts;
-      clock_gettime (CLOCK_REALTIME, &ts);
+      clock_gettime (CLOCK_REALTIME, &ts); // 纳秒级，时间不会回拨、跳变
       return ts.tv_sec + ts.tv_nsec * 1e-9;
     }
 #endif
 
   struct timeval tv;
-  gettimeofday (&tv, 0);
+  gettimeofday (&tv, 0); // 精度微秒级，时间可能会回拨、跳变
   return tv.tv_sec + tv.tv_usec * 1e-6;
 }
 #endif
 
+// 获取当前时间，用于内部定时逻辑
 inline_size ev_tstamp
 get_clock (void)
 {
@@ -1885,7 +1891,7 @@ get_clock (void)
   if (expect_true (have_monotonic))
     {
       struct timespec ts;
-      clock_gettime (CLOCK_MONOTONIC, &ts);
+      clock_gettime (CLOCK_MONOTONIC, &ts); // 纳秒级，时间不会回拨、跳变
       return ts.tv_sec + ts.tv_nsec * 1e-9;
     }
 #endif
@@ -1894,6 +1900,7 @@ get_clock (void)
 }
 
 #if EV_MULTIPLICITY
+// 获取loop当前时间
 ev_tstamp
 ev_now (EV_P) EV_THROW
 {
@@ -1901,6 +1908,7 @@ ev_now (EV_P) EV_THROW
 }
 #endif
 
+// loop休眠
 void
 ev_sleep (ev_tstamp delay) EV_THROW
 {
@@ -1910,7 +1918,7 @@ ev_sleep (ev_tstamp delay) EV_THROW
       struct timespec ts;
 
       EV_TS_SET (ts, delay);
-      nanosleep (&ts, 0);
+      nanosleep (&ts, 0); // POSIX 标准休眠接口，纳秒级精度，Linux/macOS/BSD 等类 Unix 首选。
 #elif defined _WIN32
       Sleep ((unsigned long)(delay * 1e3));
 #else
@@ -1920,7 +1928,7 @@ ev_sleep (ev_tstamp delay) EV_THROW
       /* something not guaranteed by newer posix versions, but guaranteed */
       /* by older ones */
       EV_TV_SET (tv, delay);
-      select (0, 0, 0, 0, &tv);
+      select (0, 0, 0, 0, &tv); // 老旧 POSIX 系统兜底 select 休眠
 #endif
     }
 }
@@ -1931,6 +1939,12 @@ ev_sleep (ev_tstamp delay) EV_THROW
 
 /* find a suitable new size for the given array, */
 /* hopefully by rounding to a nice-to-malloc size */
+/**
+ * elem：单个元素字节大小
+ * cur：数组当前已分配容量
+ * cnt：当前实际元素个数（需要的最小容量）
+ * 返回：新的目标容量
+*/
 inline_size int
 array_nextsize (int elem, int cur, int cnt)
 {
@@ -1952,6 +1966,7 @@ array_nextsize (int elem, int cur, int cnt)
   return ncur;
 }
 
+// 重新分配数组内存，通常是扩容
 static void * noinline ecb_cold
 array_realloc (int elem, void *base, int *cur, int cnt)
 {
@@ -1959,16 +1974,24 @@ array_realloc (int elem, void *base, int *cur, int cnt)
   return ev_realloc (base, elem * *cur);
 }
 
+// 数组清零
 #define array_init_zero(base,count)	\
   memset ((void *)(base), 0, sizeof (*(base)) * (count))
 
+/**
+ * type：数组元素类型
+ * base：数组指针
+ * cur：数组当前已分配容量，单位也是元素个数（总的）
+ * cnt：数组当前元素个数（用掉的）
+ * init：新分配的数组init方法
+ */
 #define array_needsize(type,base,cur,cnt,init)			\
-  if (expect_false ((cnt) > (cur)))				\
+  if (expect_false ((cnt) > (cur)))	/* 用掉的大于总的，需要realloc */			\
     {								\
-      int ecb_unused ocur_ = (cur);					\
-      (base) = (type *)array_realloc				\
+      int ecb_unused ocur_ = (cur);	/*保存旧容量，用于定位新分配的内存区间。*/				\
+      (base) = (type *)array_realloc /*调用 array_realloc 完成重分配，base 指向新内存地址，cur 更新为新容量。*/				\
          (sizeof (type), (base), &(cur), (cnt));		\
-      init ((base) + (ocur_), (cur) - ocur_);			\
+      init ((base) + (ocur_), (cur) - ocur_); /*自定义初始化回调，对新扩容出来的内存区间做初始化*/		\
     }
 
 #if 0
@@ -1981,6 +2004,7 @@ array_realloc (int elem, void *base, int *cur, int cnt)
     }
 #endif
 
+// 数组的xxx_cnt[i] = xxx_max[i] = 0; xxxs[i] = 0
 #define array_free(stem, idx) \
   ev_free (stem ## s idx); stem ## cnt idx = stem ## max idx = 0; stem ## s idx = 0
 
@@ -1993,6 +2017,7 @@ pendingcb (EV_P_ ev_prepare *w, int revents)
 {
 }
 
+// 将watcher和revents加入pending队列
 void noinline
 ev_feed_event (EV_P_ void *w, int revents) EV_THROW
 {
@@ -2073,6 +2098,7 @@ fd_event (EV_P_ int fd, int revents)
     fd_event_nocheck (EV_A_ fd, revents);
 }
 
+/* 将对应fd和revents的watcher加入pending队列 */
 void
 ev_feed_fd_event (EV_P_ int fd, int revents) EV_THROW
 {
@@ -2128,6 +2154,7 @@ fd_reify (EV_P)
         {
           anfd->events = 0;
 
+          // 遍历该fd上的所有watcher，将watcher监听的event都记录在anfd->events
           for (w = (ev_io *)anfd->head; w; w = (ev_io *)((WL)w)->next)
             anfd->events |= (unsigned char)w->events;
 
@@ -2139,10 +2166,11 @@ fd_reify (EV_P)
         backend_modify (EV_A_ fd, o_events, anfd->events);
     }
 
-  fdchangecnt = 0; // 情况需要reify的fd个数
+  fdchangecnt = 0; // 清零需要reify的fd个数
 }
 
 /* something about the given fd changed */
+/* fd reify */
 inline_size void
 fd_change (EV_P_ int fd, int flags)
 {
@@ -2218,6 +2246,9 @@ fd_enomem (EV_P)
 }
 
 /* usually called after fork if backend needs to re-arm all fds from scratch */
+/**
+ * fork之后，子进程在创建backend fd后执行，重新注册所有fd的监听事件（都不监听了）
+ */
 static void noinline
 fd_rearm_all (EV_P)
 {
@@ -2234,6 +2265,7 @@ fd_rearm_all (EV_P)
 
 /* used to prepare libev internal fd's */
 /* this is not fork-safe */
+/* 监听fd前的fd的准备工作：FD_CLOEXEC 和 O_NONBLOCK */
 inline_speed void
 fd_intern (int fd)
 {
@@ -2241,8 +2273,8 @@ fd_intern (int fd)
   unsigned long arg = 1;
   ioctlsocket (EV_FD_TO_WIN32_HANDLE (fd), FIONBIO, &arg);
 #else
-  fcntl (fd, F_SETFD, FD_CLOEXEC);
-  fcntl (fd, F_SETFL, O_NONBLOCK);
+  fcntl (fd, F_SETFD, FD_CLOEXEC); // 执行 exec 时自动关闭该 fd
+  fcntl (fd, F_SETFL, O_NONBLOCK); // 设置文件描述符为 非阻塞模式
 #endif
 }
 
@@ -2262,53 +2294,62 @@ fd_intern (int fd)
  */
 #if EV_USE_4HEAP
 
-#define DHEAP 4
-#define HEAP0 (DHEAP - 1) /* index of first element in heap */
-#define HPARENT(k) ((((k) - HEAP0 - 1) / DHEAP) + HEAP0)
-#define UPHEAP_DONE(p,k) ((p) == (k))
+/**
+ * 4叉堆，第一个元素的下标为HEAP0（3），简化 d 叉堆父子下标计算，避免负数、复杂偏移
+*/
+
+#define DHEAP 4                // 分支数：4叉堆，每个节点最多4个子节点
+#define HEAP0 (DHEAP - 1)      // 堆起始下标 = 3
+#define HPARENT(k) ((((k) - HEAP0 - 1) / DHEAP) + HEAP0)  // 根据下标k求父节点下标
+#define UPHEAP_DONE(p,k) ((p) == (k))                     // 上浮终止条件
 
 /* away from the root */
 inline_speed void
-downheap (ANHE *heap, int N, int k)
+downheap(ANHE *heap, int N, int k)
 {
-  ANHE he = heap [k];
-  ANHE *E = heap + N + HEAP0;
+    ANHE he = heap[k];              // ① 保存待下沉元素
+    ANHE *E = heap + N + HEAP0;     // ② 堆末尾指针（越界边界）
 
-  for (;;)
-    {
-      ev_tstamp minat;
-      ANHE *minpos;
-      ANHE *pos = heap + DHEAP * (k - HEAP0) + HEAP0 + 1;
+    for (;;) {
+        ev_tstamp minat;
+        ANHE *minpos;
+        // ③ 计算 k 的第一个子节点指针
+        //    子节点下标 = DHEAP * (k - HEAP0) + HEAP0 + 1
+        ANHE *pos = heap + DHEAP * (k - HEAP0) + HEAP0 + 1;
 
-      /* find minimum child */
-      if (expect_true (pos + DHEAP - 1 < E))
-        {
-          /* fast path */                               (minpos = pos + 0), (minat = ANHE_at (*minpos));
-          if (               ANHE_at (pos [1]) < minat) (minpos = pos + 1), (minat = ANHE_at (*minpos));
-          if (               ANHE_at (pos [2]) < minat) (minpos = pos + 2), (minat = ANHE_at (*minpos));
-          if (               ANHE_at (pos [3]) < minat) (minpos = pos + 3), (minat = ANHE_at (*minpos));
+        // ④ 快速路径：4 个子节点都存在
+        if (expect_true(pos + DHEAP - 1 < E)) {
+            (minpos = pos + 0), (minat = ANHE_at(*minpos));
+            if (ANHE_at(pos[1]) < minat) (minpos = pos + 1), (minat = ANHE_at(*minpos));
+            if (ANHE_at(pos[2]) < minat) (minpos = pos + 2), (minat = ANHE_at(*minpos));
+            if (ANHE_at(pos[3]) < minat) (minpos = pos + 3), (minat = ANHE_at(*minpos));
         }
-      else if (pos < E)
-        {
-          /* slow path */                               (minpos = pos + 0), (minat = ANHE_at (*minpos));
-          if (pos + 1 < E && ANHE_at (pos [1]) < minat) (minpos = pos + 1), (minat = ANHE_at (*minpos));
-          if (pos + 2 < E && ANHE_at (pos [2]) < minat) (minpos = pos + 2), (minat = ANHE_at (*minpos));
-          if (pos + 3 < E && ANHE_at (pos [3]) < minat) (minpos = pos + 3), (minat = ANHE_at (*minpos));
+        // ⑤ 慢速路径：部分子节点存在
+        else if (pos < E) {
+            (minpos = pos + 0), (minat = ANHE_at(*minpos));
+            if (pos + 1 < E && ANHE_at(pos[1]) < minat) (minpos = pos + 1), (minat = ANHE_at(*minpos));
+            if (pos + 2 < E && ANHE_at(pos[2]) < minat) (minpos = pos + 2), (minat = ANHE_at(*minpos));
+            if (pos + 3 < E && ANHE_at(pos[3]) < minat) (minpos = pos + 3), (minat = ANHE_at(*minpos));
         }
-      else
-        break;
+        // ⑥ 无子节点
+        else
+            break;
 
-      if (ANHE_at (he) <= minat)
-        break;
+        // ⑦ 父节点 ≤ 最小子节点，堆性质满足
+        if (ANHE_at(he) <= minat)
+            break;
 
-      heap [k] = *minpos;
-      ev_active (ANHE_w (*minpos)) = k;
+        // ⑧ 最小子节点上移
+        heap[k] = *minpos;
+        ev_active(ANHE_w(*minpos)) = k;
 
-      k = minpos - heap;
+        // ⑨ 继续向下
+        k = minpos - heap;
     }
 
-  heap [k] = he;
-  ev_active (ANHE_w (he)) = k;
+    // ⑩ 放到最终位置
+    heap[k] = he;
+    ev_active(ANHE_w(he)) = k;
 }
 
 #else /* 4HEAP */
@@ -2348,25 +2389,34 @@ downheap (ANHE *heap, int N, int k)
 #endif
 
 /* towards the root */
+/* 上浮操作：将位置 k 的元素向根方向调整，恢复最小堆性质 */
 inline_speed void
 upheap (ANHE *heap, int k)
 {
-  ANHE he = heap [k];
+  ANHE he = heap [k]; /* 保存待上浮的元素 */
 
   for (;;)
     {
-      int p = HPARENT (k);
+      int p = HPARENT (k); /* 计算 k 的父节点下标 */
 
+      /* 终止条件（二选一）：
+       * 1. UPHEAP_DONE(p, k)：已到达根节点，无法继续上浮
+       *    - 二叉堆(HEAP0=1)：p == 0 即终止
+       *    - 四叉堆(HEAP0=3)：p == k 即终止
+       * 2. 父节点的 at 值 <= 当前元素的 at 值，最小堆性质已满足
+       */
       if (UPHEAP_DONE (p, k) || ANHE_at (heap [p]) <= ANHE_at (he))
         break;
 
+      /* 父节点更大，需要下移到 k 的位置 */
       heap [k] = heap [p];
-      ev_active (ANHE_w (heap [k])) = k;
-      k = p;
+      ev_active (ANHE_w (heap [k])) = k; /* 同步更新父节点 watcher 的 active 索引 */
+      k = p; /* k 上移到父节点位置，继续向上检查 */
     }
 
+  /* 将待上浮元素放到最终位置 */
   heap [k] = he;
-  ev_active (ANHE_w (he)) = k;
+  ev_active (ANHE_w (he)) = k; /* 同步更新该元素 watcher 的 active 索引 */
 }
 
 /* move an element suitably so it is in a correct place */
@@ -2399,11 +2449,11 @@ reheap (ANHE *heap, int N)
 */
 typedef struct
 {
-  EV_ATOMIC_T pending;
+  EV_ATOMIC_T pending; // 信号是否发生了
 #if EV_MULTIPLICITY
   EV_P;
 #endif
-  WL head;
+  WL head; // 每个signal可能对应多个watcher
 } ANSIG;
 
 static ANSIG signals [EV_NSIG - 1];
@@ -2412,10 +2462,11 @@ static ANSIG signals [EV_NSIG - 1];
 
 #if EV_SIGNAL_ENABLE || EV_ASYNC_ENABLE
 
+// pipe初始化
 static void noinline ecb_cold
 evpipe_init (EV_P)
 {
-  if (!ev_is_active (&pipe_w))
+  if (!ev_is_active (&pipe_w)) // 如果 pipe_w 是 active，就意味着初始化过了
     {
       int fds [2];
 
@@ -2428,10 +2479,10 @@ evpipe_init (EV_P)
       if (fds [1] < 0)
 # endif
         {
-          while (pipe (fds))
+          while (pipe (fds)) // 创建pipe
             ev_syserr ("(libev) error creating signal/async pipe");
 
-          fd_intern (fds [0]);
+          fd_intern (fds [0]); // 设置pipe读端为非阻塞和FD_CLOEXEC
         }
 
       evpipe [0] = fds [0];
@@ -2444,19 +2495,24 @@ evpipe_init (EV_P)
           /* so that evpipe_write can always rely on its value. */
           /* this branch does not do anything sensible on windows, */
           /* so must not be executed on windows */
-
+          // 确保pipe的写端一直是evpipe[1]的值
           dup2 (fds [1], evpipe [1]);
           close (fds [1]);
         }
 
       fd_intern (evpipe [1]);
 
+      // 注册 pipe 的读端到事件循环
       ev_io_set (&pipe_w, evpipe [0] < 0 ? evpipe [1] : evpipe [0], EV_READ);
       ev_io_start (EV_A_ &pipe_w);
       ev_unref (EV_A); /* watcher should not keep loop alive */
     }
 }
 
+/**
+ * 当有signal和async需要处理时，就会调用这个函数进行写pipe
+ * flag是待写入的标志位
+ */
 inline_speed void
 evpipe_write (EV_P_ EV_ATOMIC_T *flag)
 {
@@ -2466,14 +2522,14 @@ evpipe_write (EV_P_ EV_ATOMIC_T *flag)
   if (expect_true (*flag))
     return;
 
-  *flag = 1;
+  *flag = 1; // 设置标志位，要么是sig_pending，要么是async_pending
   ECB_MEMORY_FENCE_RELEASE; /* make sure flag is visible before the wakeup */
 
-  pipe_write_skipped = 1;
+  pipe_write_skipped = 1; // 标志为跳过一次写pipe
 
   ECB_MEMORY_FENCE; /* make sure pipe_write_skipped is visible before we check pipe_write_wanted */
 
-  if (pipe_write_wanted)
+  if (pipe_write_wanted) // 判断是否要写pipe
     {
       int old_errno;
 
@@ -2498,7 +2554,7 @@ evpipe_write (EV_P_ EV_ATOMIC_T *flag)
           buf.len = 1;
           WSASend (EV_FD_TO_WIN32_HANDLE (evpipe [1]), &buf, 1, &sent, 0, 0, 0);
 #else
-          write (evpipe [1], &(evpipe [1]), 1);
+          write (evpipe [1], &(evpipe [1]), 1); // 写pipe，唤醒loop
 #endif
         }
 
@@ -2508,6 +2564,12 @@ evpipe_write (EV_P_ EV_ATOMIC_T *flag)
 
 /* called whenever the libev signal pipe */
 /* got some events (signal, async) */
+/**
+ * pipe读端可读（意味着有东西需要处理）的callback
+ * 1. 读管道数据
+ * 2. 将收到的signal对应watcher加入到pending队列
+ * 3. 将async对应watcher加入到pending队列
+ */
 static void
 pipecb (EV_P_ ev_io *iow, int revents)
 {
@@ -2538,20 +2600,22 @@ pipecb (EV_P_ ev_io *iow, int revents)
         }
     }
 
+  // TODO: 标志含义是什么？
   pipe_write_skipped = 0;
 
   ECB_MEMORY_FENCE; /* push out skipped, acquire flags */
 
 #if EV_SIGNAL_ENABLE
-  if (sig_pending)
+  if (sig_pending) // sig_pending 不为 0，代表有 signal 需要处理
     {
       sig_pending = 0;
 
       ECB_MEMORY_FENCE;
 
+      // 遍历signals数组，将发生的watcher（pending为1）加入到pending队列
       for (i = EV_NSIG - 1; i--; )
         if (expect_false (signals [i].pending))
-          ev_feed_signal_event (EV_A_ i + 1);
+          ev_feed_signal_event (EV_A_ i + 1); // signal值 = 数组索引 + 1
     }
 #endif
 
@@ -2562,6 +2626,7 @@ pipecb (EV_P_ ev_io *iow, int revents)
 
       ECB_MEMORY_FENCE;
 
+      // 将asyncs中sent位不为0的watcher加入到pending队列
       for (i = asynccnt; i--; )
         if (asyncs [i]->sent)
           {
@@ -2574,7 +2639,7 @@ pipecb (EV_P_ ev_io *iow, int revents)
 }
 
 /*****************************************************************************/
-
+// 将signal watcher的pending位设置为1，并写pipe唤醒loop处理
 void
 ev_feed_signal (int signum) EV_THROW
 {
@@ -2588,9 +2653,10 @@ ev_feed_signal (int signum) EV_THROW
 #endif
 
   signals [signum - 1].pending = 1; // 设置标志位为1，代表signal发生了
-  evpipe_write (EV_A_ &sig_pending); // TODO: 写pipe
+  evpipe_write (EV_A_ &sig_pending); // 写pipe唤醒loop处理signal
 }
 
+// 信号处理函数
 static void
 ev_sighandler (int signum)
 {
@@ -2601,6 +2667,7 @@ ev_sighandler (int signum)
   ev_feed_signal (signum);
 }
 
+// 将signal watcger加入到pending队列等待调度
 void noinline
 ev_feed_signal_event (EV_P_ int signum) EV_THROW
 {
@@ -2609,24 +2676,25 @@ ev_feed_signal_event (EV_P_ int signum) EV_THROW
   if (expect_false (signum <= 0 || signum >= EV_NSIG))
     return;
 
-  --signum;
+  --signum; // 数组索引 = signal值 - 1
 
 #if EV_MULTIPLICITY
   /* it is permissible to try to feed a signal to the wrong loop */
   /* or, likely more useful, feeding a signal nobody is waiting for */
 
-  if (expect_false (signals [signum].loop != EV_A))
+  if (expect_false (signals [signum].loop != EV_A)) // 检查该signal属不属于当前的loop管
     return;
 #endif
 
-  signals [signum].pending = 0;
+  signals [signum].pending = 0; // 清空标志位，代表该signal已经处理了
   ECB_MEMORY_FENCE_RELEASE;
 
   for (w = signals [signum].head; w; w = w->next)
-    ev_feed_event (EV_A_ (W)w, EV_SIGNAL);
+    ev_feed_event (EV_A_ (W)w, EV_SIGNAL); // 将watcher列表加入到pending队列
 }
 
 #if EV_USE_SIGNALFD
+
 static void
 sigfdcb (EV_P_ ev_io *iow, int revents)
 {
@@ -2666,15 +2734,16 @@ child_reap (EV_P_ int chain, int pid, int status)
   ev_child *w;
   int traced = WIFSTOPPED (status) || WIFCONTINUED (status);
 
+  // 遍历hash桶的watcher list
   for (w = (ev_child *)childs [chain & ((EV_PID_HASHSIZE) - 1)]; w; w = (ev_child *)((WL)w)->next)
     {
-      if ((w->pid == pid || !w->pid)
+      if ((w->pid == pid || !w->pid) /*pid相等，或者pid为0（（监听所有子进程））*/
           && (!traced || (w->flags & 1)))
         {
           ev_set_priority (w, EV_MAXPRI); /* need to do it *now*, this *must* be the same prio as the signal watcher itself */
-          w->rpid    = pid;
-          w->rstatus = status;
-          ev_feed_event (EV_A_ (W)w, EV_CHILD);
+          w->rpid    = pid; // 设置子进程pid
+          w->rstatus = status; // 设置子进程的退出状态
+          ev_feed_event (EV_A_ (W)w, EV_CHILD); // 加入pending队列
         }
     }
 }
@@ -2684,6 +2753,7 @@ child_reap (EV_P_ int chain, int pid, int status)
 #endif
 
 /* called on sigchld etc., calls waitpid */
+// sigchld的callback，
 static void
 childcb (EV_P_ ev_signal *sw, int revents)
 {
@@ -2698,10 +2768,11 @@ childcb (EV_P_ ev_signal *sw, int revents)
 
   /* make sure we are called again until all children have been reaped */
   /* we need to do it this way so that the callback gets called before we continue */
-  ev_feed_event (EV_A_ (W)sw, EV_SIGNAL);
+  ev_feed_event (EV_A_ (W)sw, EV_SIGNAL); // 安排下一次调用（waitpid(-1, WNOHANG) 一次只能收割一个子进程。如果同时有多个子进程退出，需要多次调用 waitpid 才能全部收割完毕。）
 
-  child_reap (EV_A_ pid, pid, status);
+  child_reap (EV_A_ pid, pid, status); // 在 pid 的 hash 桶中查找 watcher
   if ((EV_PID_HASHSIZE) > 1)
+    // 在 0 号桶中查找 pid=0 的通用 watcher
     child_reap (EV_A_ 0, pid, status); /* this might trigger a watcher twice, but feed_event catches that */
 }
 
@@ -2728,6 +2799,7 @@ childcb (EV_P_ ev_signal *sw, int revents)
 # include "ev_select.c"
 #endif
 
+/* 版本号 */
 int ecb_cold
 ev_version_major (void) EV_THROW
 {
@@ -2803,17 +2875,15 @@ ev_recommended_backends (void) EV_THROW
   return flags;
 }
 
-/* 返回支持嵌套的backend */
+/* 返回支持嵌套的backend: select 和 poll */
 unsigned int ecb_cold
 ev_embeddable_backends (void) EV_THROW
 {
-  int flags = EVBACKEND_EPOLL | EVBACKEND_KQUEUE | EVBACKEND_PORT;
-
-  /* epoll embeddability broken on all linux versions up to at least 2.6.23 */
-  if (ev_linux_version () < 0x020620) /* disable it on linux < 2.6.32 */
-    flags &= ~EVBACKEND_EPOLL;
-
-  return flags;
+  return EVBACKEND_SELECT
+#if EV_USE_POLL
+       | EVBACKEND_POLL
+#endif
+       ;
 }
 
 /* 返回event loop的backend */
@@ -2845,18 +2915,21 @@ ev_set_io_collect_interval (EV_P_ ev_tstamp interval) EV_THROW
   io_blocktime = interval;
 }
 
+// timer超时检测间隔（也就是backend poll的最小wait time）
 void
 ev_set_timeout_collect_interval (EV_P_ ev_tstamp interval) EV_THROW
 {
   timeout_blocktime = interval;
 }
 
+// 设置用户数据
 void
 ev_set_userdata (EV_P_ void *data) EV_THROW
 {
   userdata = data;
 }
 
+// 获取用户数据
 void *
 ev_userdata (EV_P) EV_THROW
 {
@@ -2880,13 +2953,12 @@ ev_set_loop_release_cb (EV_P_ void (*release)(EV_P) EV_THROW, void (*acquire)(EV
 /* initialise a loop structure, must be zero-initialised */
 /**
  * 初始化event loop
- * 
 */
 static void noinline ecb_cold
 loop_init (EV_P_ unsigned int flags) EV_THROW
 {
   // flags用于开启或关闭feature
-  if (!backend) // 没有backend，就没必要初始化下去了
+  if (!backend) // backend为0，代表还没初始化，继续初始化
     {
       origflags = flags;
 
@@ -2901,6 +2973,8 @@ loop_init (EV_P_ unsigned int flags) EV_THROW
 #endif
 
 #if EV_USE_MONOTONIC
+      // 来检测系统是否支持 MONOTONIC 时钟的
+      // CLOCK_MONOTONIC 是一个不受系统时间调整影响（如 NTP 同步、用户手动改时间）的时钟，只从某个固定起点（通常是系统启动后）开始单调递增。
       if (!have_monotonic)
         {
           struct timespec ts;
@@ -2913,7 +2987,7 @@ loop_init (EV_P_ unsigned int flags) EV_THROW
       /* pid check not overridable via env */
 #ifndef _WIN32
       if (flags & EVFLAG_FORKCHECK) // 如果开启了fork check
-        curpid = getpid (); // 记录pid
+        curpid = getpid (); // 记录当前的pid
 #endif
 
       if (!(flags & EVFLAG_NOENV) // 如果没有开启EVFLAG_NOENV并且enable_secure
@@ -2921,28 +2995,34 @@ loop_init (EV_P_ unsigned int flags) EV_THROW
           && getenv ("LIBEV_FLAGS"))
         flags = atoi (getenv ("LIBEV_FLAGS")); // 解析环境变量LIBEV_FLAGS作为flags
 
-      ev_rt_now          = ev_time ();
-      mn_now             = get_clock ();
+      ev_rt_now          = ev_time (); // 获取绝对时间（wall clock）
+      mn_now             = get_clock (); // 获取单调时间
       now_floor          = mn_now;
-      rtmn_diff          = ev_rt_now - mn_now;
+      /**
+       * now_floor 用于 timer 去重，now_floor 记录的是本轮事件循环开始时的 mn_now
+       * 具体来说，now_floor 记录的是本轮事件循环开始时的 mn_now，在一轮循环中 mn_now 可能会被更新（通过 time_update），但它不会回退。
+       * 如果有多个 timer 在同一轮中被处理，后续的 timer 判断会确保时间不小于 now_floor，避免因为 mn_now 的微小回退导致同一个 timer 被处理两次。
+      */
+      rtmn_diff          = ev_rt_now - mn_now; // 绝对时间与单调时间的差值
 #if EV_FEATURE_API
-      invoke_cb          = ev_invoke_pending;
+      invoke_cb          = ev_invoke_pending; // 执行watcher的callback
 #endif
 
       io_blocktime       = 0.;
       timeout_blocktime  = 0.;
-      backend            = 0;
-      backend_fd         = -1;
-      sig_pending        = 0;
+      backend            = 0;  // 后端类型
+      backend_fd         = -1; // 后端fd
+      sig_pending        = 0;  // 信号待处理标志
 #if EV_ASYNC_ENABLE
-      async_pending      = 0;
+      async_pending      = 0;  // async异步事件待处理标志
 #endif
-      pipe_write_skipped = 0;
-      pipe_write_wanted  = 0;
-      evpipe [0]         = -1;
-      evpipe [1]         = -1;
+      // 初始化pipe相关的成员
+      pipe_write_skipped = 0; // pipe_write_skipped记录因为 pipe 写入缓冲区满等原因被跳过了写操作的次数
+      pipe_write_wanted  = 0; // pipe_write_wanted表示有 signal/async 事件需要通知事件循环（即想要往 pipe 里写数据）
+      evpipe [0]         = -1; // pipe读端
+      evpipe [1]         = -1; // pipe写端
 #if EV_USE_INOTIFY
-      fs_fd              = flags & EVFLAG_NOINOTIFY ? -1 : -2;
+      fs_fd              = flags & EVFLAG_NOINOTIFY ? -1 : -2; // -1 代表不支持inotify，-2代表支持
 #endif
 #if EV_USE_SIGNALFD
       sigfd              = flags & EVFLAG_SIGNALFD  ? -2 : -1;
@@ -2951,6 +3031,7 @@ loop_init (EV_P_ unsigned int flags) EV_THROW
       if (!(flags & EVBACKEND_MASK))
         flags |= ev_recommended_backends ();
 
+      /*                backend 初始化                   */
 #if EV_USE_IOCP
       if (!backend && (flags & EVBACKEND_IOCP  )) backend = iocp_init   (EV_A_ flags);
 #endif
@@ -2970,9 +3051,11 @@ loop_init (EV_P_ unsigned int flags) EV_THROW
       if (!backend && (flags & EVBACKEND_SELECT)) backend = select_init (EV_A_ flags);
 #endif
 
+      /* 初始化 ev_prepare，指定callback。pendingcb什么都不做 */
       ev_prepare_init (&pending_w, pendingcb);
 
 #if EV_SIGNAL_ENABLE || EV_ASYNC_ENABLE
+      // 设置监控管道读端的 IO watcher 的callback（读pipe）
       ev_init (&pipe_w, pipecb);
       ev_set_priority (&pipe_w, EV_MAXPRI);
 #endif
@@ -2994,15 +3077,16 @@ ev_loop_destroy (EV_P)
 
 #if EV_CLEANUP_ENABLE
   /* queue cleanup watchers (and execute them) */
-  // cleanup watchers加入到pending队列
+  //执行cleanup watchers的callback
   if (expect_false (cleanupcnt))
     {
-      queue_events (EV_A_ (W *)cleanups, cleanupcnt, EV_CLEANUP); // 加入队列
+      queue_events (EV_A_ (W *)cleanups, cleanupcnt, EV_CLEANUP);
       EV_INVOKE_PENDING; // 执行：清空pending队列
     }
 #endif
 
 #if EV_CHILD_ENABLE
+  // 停止监听childdev
   if (ev_is_default_loop (EV_A) && ev_is_active (&childev))
     {
       ev_ref (EV_A); /* child watcher */
@@ -3010,6 +3094,7 @@ ev_loop_destroy (EV_P)
     }
 #endif
 
+  // 关闭pipe
   if (ev_is_active (&pipe_w))
     {
       /*ev_ref (EV_A);*/
@@ -3029,6 +3114,7 @@ ev_loop_destroy (EV_P)
     close (fs_fd);
 #endif
 
+  // 关闭backend fd
   if (backend_fd >= 0)
     close (backend_fd);
 
@@ -3051,6 +3137,7 @@ ev_loop_destroy (EV_P)
   if (backend == EVBACKEND_SELECT) select_destroy (EV_A);
 #endif
 
+  // 释放数组
   for (i = NUMPRI; i--; )
     {
       array_free (pending, [i]);
@@ -3088,7 +3175,7 @@ ev_loop_destroy (EV_P)
     ev_default_loop_ptr = 0;
 #if EV_MULTIPLICITY
   else
-    ev_free (EV_A);
+    ev_free (EV_A); // 释放loop内存
 #endif
 }
 
@@ -3096,6 +3183,10 @@ ev_loop_destroy (EV_P)
 inline_size void infy_fork (EV_P);
 #endif
 
+// 子进程在fork后执行：
+// . 重新创建backend fd
+// . 关闭父进程的inotify，创建子进程的inotify
+// . 关闭父进程的pipe，创建子进程的pipe
 inline_size void
 loop_fork (EV_P)
 {
@@ -3114,6 +3205,7 @@ loop_fork (EV_P)
 
 #if EV_SIGNAL_ENABLE || EV_ASYNC_ENABLE
   if (ev_is_active (&pipe_w) && postfork != 2)
+    // 关闭父进程的pipe，创建子进程的pipe
     {
       /* pipe_write_wanted must be false now, so modifying fd vars should be safe */
 
@@ -3129,11 +3221,12 @@ loop_fork (EV_P)
     }
 #endif
 
-  postfork = 0;
+  postfork = 0; // 标志for之后，子进程的清理工作完成
 }
 
 #if EV_MULTIPLICITY
 
+// 创建loop（非default loop）
 struct ev_loop * ecb_cold
 ev_loop_new (unsigned int flags) EV_THROW
 {
@@ -3155,9 +3248,9 @@ ev_loop_new (unsigned int flags) EV_THROW
 static void noinline ecb_cold
 verify_watcher (EV_P_ W w)
 {
-  assert (("libev: watcher has invalid priority", ABSPRI (w) >= 0 && ABSPRI (w) < NUMPRI));
+  assert (("libev: watcher has invalid priority", ABSPRI (w) >= 0 && ABSPRI (w) < NUMPRI)); // 检查优先级是否有效
 
-  if (w->pending)
+  if (w->pending) // 设置了pending位，但是watcher并不在pending队列
     assert (("libev: pending watcher not on pending queue", pendings [ABSPRI (w)][w->pending - 1].w == w));
 }
 
@@ -3176,17 +3269,19 @@ verify_heap (EV_P_ ANHE *heap, int N)
     }
 }
 
+/* 检查整个watcher数组中的所有watcher是否合法 */
 static void noinline ecb_cold
 array_verify (EV_P_ W *ws, int cnt)
 {
   while (cnt--)
     {
-      assert (("libev: active index mismatch", ev_active (ws [cnt]) == cnt + 1));
-      verify_watcher (EV_A_ ws [cnt]);
+      assert (("libev: active index mismatch", ev_active (ws [cnt]) == cnt + 1)); // 检查watcher的active是否和数组下标一致
+      verify_watcher (EV_A_ ws [cnt]); // 检查watcher是否合法，具体见函数内容
     }
 }
 #endif
 
+/* 检查所有watcher的合法性和一致性， 一般不开启，因为要遍历检查所有watcher */
 #if EV_FEATURE_API
 void ecb_cold
 ev_verify (EV_P) EV_THROW
@@ -3229,6 +3324,7 @@ ev_verify (EV_P) EV_THROW
   verify_heap (EV_A_ periodics, periodiccnt);
 #endif
 
+  // 检查所有watcher是否合法，具体见array_verify
   for (i = NUMPRI; i--; )
     {
       assert (pendingmax [i] >= pendingcnt [i]);
@@ -3275,25 +3371,33 @@ ev_verify (EV_P) EV_THROW
 #endif
 
 #if EV_MULTIPLICITY
+// 返回默认的loop
 struct ev_loop * ecb_cold
 #else
 int
 #endif
 ev_default_loop (unsigned int flags) EV_THROW
 {
-  if (!ev_default_loop_ptr)
+  if (!ev_default_loop_ptr) // 检查default loop是否已经初始化
     {
 #if EV_MULTIPLICITY
       EV_P = ev_default_loop_ptr = &default_loop_struct;
 #else
-      ev_default_loop_ptr = 1;
+      ev_default_loop_ptr = 1; // 标志为初始化完成
 #endif
 
+      // 初始化default loop
       loop_init (EV_A_ flags);
 
       if (ev_backend (EV_A))
         {
 #if EV_CHILD_ENABLE
+          // 设置SIGCHLD的watcher的callback为childcb
+          // SIGCHLD 由 内核 自动发送给 父进程 ，在以下三种情况发生时：
+          // 子进程正常退出 子进程调用 exit() 或 return exit(0)
+          // 子进程异常终止 子进程被信号杀死 kill -9 child_pid
+          // 子进程停止 子进程被 SIGSTOP / SIGTSTP 停止 Ctrl+Z（SIGTSTP）
+          // 子进程继续 子进程被 SIGCONT 恢复运行 fg 命令发送 SIGCONT
           ev_signal_init (&childev, childcb, SIGCHLD);
           ev_set_priority (&childev, EV_MAXPRI);
           ev_signal_start (EV_A_ &childev);
@@ -3307,6 +3411,7 @@ ev_default_loop (unsigned int flags) EV_THROW
   return ev_default_loop_ptr;
 }
 
+// 子进程在fork后，ev_run之前调用
 void
 ev_loop_fork (EV_P) EV_THROW
 {
@@ -3314,13 +3419,14 @@ ev_loop_fork (EV_P) EV_THROW
 }
 
 /*****************************************************************************/
-
+// 调用watcher的callback
 void
 ev_invoke (EV_P_ void *w, int revents)
 {
   EV_CB_INVOKE ((W)w, revents);
 }
 
+// 获取pending的watcher数量
 unsigned int
 ev_pending_count (EV_P) EV_THROW
 {
@@ -3367,12 +3473,12 @@ idle_reify (EV_P)
 
       for (pri = NUMPRI; pri--; )
         {
-          if (pendingcnt [pri])
+          if (pendingcnt [pri]) // 检查每个优先级的pendingcnt，大于0代表有watcher在pending，不需要执行idle watcher
             break;
 
-          if (idlecnt [pri])
+          if (idlecnt [pri]) // 如果对应优先级pendingcnt为0且idlecnt大于0
             {
-              // idle watchers加入pending队列
+              // 则对应优先级的idle watchers加入pending队列
               queue_events (EV_A_ (W *)idles [pri], idlecnt [pri], EV_IDLE);
               break;
             }
@@ -3387,7 +3493,7 @@ timers_reify (EV_P)
 {
   EV_FREQUENT_CHECK;
 
-  if (timercnt && ANHE_at (timers [HEAP0]) < mn_now)
+  if (timercnt && ANHE_at (timers [HEAP0]) < mn_now) // 堆顶timer超时时间小于mn_now，代表已经timer超时
     {
       do
         {
@@ -3396,6 +3502,7 @@ timers_reify (EV_P)
           /*assert (("libev: inactive timer on timer heap detected", ev_is_active (w)));*/
 
           /* first reschedule or stop timer */
+          // 如果为repeat就加入调度，否则暂停timer
           if (w->repeat)
             {
               ev_at (w) += w->repeat;
@@ -3411,23 +3518,27 @@ timers_reify (EV_P)
             ev_timer_stop (EV_A_ w); /* nonrepeating: stop timer */
 
           EV_FREQUENT_CHECK;
+          // 将超时timer的watcher存到rfeeds
           feed_reverse (EV_A_ (W)w);
         }
       while (timercnt && ANHE_at (timers [HEAP0]) < mn_now);
-
+      
+      // 将超时timer的watcher一并加入到pending队列
       feed_reverse_done (EV_A_ EV_TIMER);
     }
 }
 
 #if EV_PERIODIC_ENABLE
 
+// 计算periodic timer的下一次超时时间at
 static void noinline
 periodic_recalc (EV_P_ ev_periodic *w)
 {
-  ev_tstamp interval = w->interval > MIN_INTERVAL ? w->interval : MIN_INTERVAL;
-  ev_tstamp at = w->offset + interval * ev_floor ((ev_rt_now - w->offset) / interval);
+  ev_tstamp interval = w->interval > MIN_INTERVAL ? w->interval : MIN_INTERVAL;         // timer超时间隔
+  ev_tstamp at = w->offset + interval * ev_floor ((ev_rt_now - w->offset) / interval);  // 超时时间
 
   /* the above almost always errs on the low side */
+  // 计算超时时间
   while (at <= ev_rt_now)
     {
       ev_tstamp nat = at + w->interval;
@@ -3512,6 +3623,7 @@ periodics_reschedule (EV_P)
 #endif
 
 /* adjust all timers by a given offset */
+// 将所有timer的超时时间往挪offset
 static void noinline ecb_cold
 timers_reschedule (EV_P_ ev_tstamp adjust)
 {
@@ -3600,13 +3712,14 @@ int
 ev_run (EV_P_ int flags)
 {
 #if EV_FEATURE_API
-  ++loop_depth;
+  ++loop_depth; // 进入ev_run的次数
 #endif
 
   assert (("libev: ev_loop recursion during release detected", loop_done != EVBREAK_RECURSE));
 
   loop_done = EVBREAK_CANCEL;
 
+  // 执行pending队列的callback
   EV_INVOKE_PENDING; /* in case we recurse, ensure ordering stays nice and clean */
 
   do
@@ -3616,26 +3729,28 @@ ev_run (EV_P_ int flags)
 #endif
 
 #ifndef _WIN32
-      if (expect_false (curpid)) /* penalise the forking check even more */
-        if (expect_false (getpid () != curpid))
+      if (expect_false (curpid)) /* penalise the forking check even more */ // curpid为0，代表loop还没初始化
+        if (expect_false (getpid () != curpid)) // 子进程
           {
+            // 记录pid和设置标志位
             curpid = getpid ();
-            postfork = 1;
+            postfork = 1; // 设置 postfork = 1，后续逻辑会重新初始化 backend（epoll fd、kqueue fd 等），因为父进程的 fd 在子进程中不可用
           }
 #endif
 
 #if EV_FORK_ENABLE
       /* we might have forked, so queue fork handlers */
-      if (expect_false (postfork))
-        if (forkcnt)
+      if (expect_false (postfork)) // 如果fork了
+        if (forkcnt) // 且有child watcher
           {
+            // 则执行所有child watcher的callback
             queue_events (EV_A_ (W *)forks, forkcnt, EV_FORK);
             EV_INVOKE_PENDING;
           }
 #endif
 
 #if EV_PREPARE_ENABLE
-      // prepare watcher加入调度
+      // 执行prepare watcher的callback
       /* queue prepare watchers (and execute them) */
       if (expect_false (preparecnt))
         {
@@ -3644,15 +3759,16 @@ ev_run (EV_P_ int flags)
         }
 #endif
 
-      if (expect_false (loop_done))
+      if (expect_false (loop_done)) // 如果外界同ev_break入的值不为EVBREAK_CANCEL，就需要中断当前loop，跳出while循环
         break;
 
       /* we might have forked, so reify kernel state if necessary */
+      // 子进程执行的，清理父进程的loop内容
       if (expect_false (postfork))
         loop_fork (EV_A);
 
       /* update fd-related kernel structures */
-      // 重新注册fd的监听事件
+      // 重新注册fd的监听事件（清空fdchanges）
       fd_reify (EV_A);
 
       /* calculate blocking time */
@@ -3664,39 +3780,40 @@ ev_run (EV_P_ int flags)
         ev_tstamp prev_mn_now = mn_now;
 
         /* update time to cancel out callback processing overhead */
+        // time_update 在每次 backend poll 返回后被调用，作用是校准时间并处理时间跳变。
         time_update (EV_A_ 1e100);
 
         /* from now on, we want a pipe-wake-up */
-        pipe_write_wanted = 1;
+        pipe_write_wanted = 1; // 此时需要写pipe来唤醒loop
 
         ECB_MEMORY_FENCE; /* make sure pipe_write_wanted is visible before we check for potential skips */
 
         if (expect_true (!(flags & EVRUN_NOWAIT || idleall || !activecnt || pipe_write_skipped)))
-          {
-            waittime = MAX_BLOCKTIME;
+          { // 如下条件都不满足：flags & EVRUN_NOWAIT || idleall || !activecnt || pipe_write_skipped
+            waittime = MAX_BLOCKTIME; // 计算backend poll阻塞时间
 
             if (timercnt)
-              {
-                ev_tstamp to = ANHE_at (timers [HEAP0]) - mn_now;
-                if (waittime > to) waittime = to;
-              }
+            {
+              ev_tstamp to = ANHE_at (timers [HEAP0]) - mn_now;
+              if (waittime > to) waittime = to; // ev_timer: 堆顶timer超时间 - mn_now 作为 waittime
+            }
 
 #if EV_PERIODIC_ENABLE
             if (periodiccnt)
               {
                 ev_tstamp to = ANHE_at (periodics [HEAP0]) - ev_rt_now;
-                if (waittime > to) waittime = to;
+                if (waittime > to) waittime = to; // ev_periodics: 堆顶timer超时间 - ev_rt_now 作为 waittime
               }
 #endif
 
             /* don't let timeouts decrease the waittime below timeout_blocktime */
             if (expect_false (waittime < timeout_blocktime))
-              waittime = timeout_blocktime;
+              waittime = timeout_blocktime; // waittime最小不能比timeout_blocktime小（timeout_blocktime由用户设置）
 
             /* at this point, we NEED to wait, so we have to ensure */
             /* to pass a minimum nonzero value to the backend */
             if (expect_false (waittime < backend_mintime))
-              waittime = backend_mintime;
+              waittime = backend_mintime; // waittime最小不能比backend_mintime小（backend_mintime在backend init时设置）
 
             /* extra check because io_blocktime is commonly 0 */
             if (expect_false (io_blocktime))
@@ -3717,27 +3834,33 @@ ev_run (EV_P_ int flags)
 #if EV_FEATURE_API
         ++loop_count;
 #endif
+        // debug 模式下 assert 生效，运行时检查返回值是否为 1（恒真），同时完成赋值。release 模式下 assert 被 NDEBUG 宏展开为空，这两行代码完全消失，零开销
+        // 之前：设为 EVBREAK_RECURSE — 表示进入递归的 I/O 等待状态，防止 ev_break 在此期间的 EVBREAK_ALL 影响到外层循环
         assert ((loop_done = EVBREAK_RECURSE, 1)); /* assert for side effect */
         backend_poll (EV_A_ waittime); /* 执行I/O复用API */
+        // 之后：设为 EVBREAK_CANCEL — 恢复正常，允许 ev_break 生效
         assert ((loop_done = EVBREAK_CANCEL, 1)); /* assert for side effect */
 
         pipe_write_wanted = 0; /* just an optimisation, no fence needed */
 
         ECB_MEMORY_FENCE_ACQUIRE;
-        if (pipe_write_skipped)
+        if (pipe_write_skipped) // pipe_write_skipped 不为0，代表有signal和async需要处理
           {
             assert (("libev: pipe_w not active, but pipe not written", ev_is_active (&pipe_w)));
-            ev_feed_event (EV_A_ &pipe_w, EV_CUSTOM);
+            ev_feed_event (EV_A_ &pipe_w, EV_CUSTOM); // 将 pipe watcher 加入pending队列
           }
 
 
         /* update ev_rt_now, do magic */
+        // 更新时间
         time_update (EV_A_ waittime + sleeptime);
       }
 
       /* queue pending timers and reschedule them */
+      // 处理超时timer
       timers_reify (EV_A); /* relative timers called last */
 #if EV_PERIODIC_ENABLE
+      // 处理超时timer
       periodics_reify (EV_A); /* absolute timers called first */
 #endif
 
@@ -3748,20 +3871,21 @@ ev_run (EV_P_ int flags)
 
 #if EV_CHECK_ENABLE
       /* queue check watchers, to be executed first */
+      // 执行check watchers的callback
       if (expect_false (checkcnt))
         queue_events (EV_A_ (W *)checks, checkcnt, EV_CHECK);
 #endif
 
-      EV_INVOKE_PENDING;
+      EV_INVOKE_PENDING; // 执行pending队列的callback
     }
   while (expect_true (
-    activecnt
-    && !loop_done
-    && !(flags & (EVRUN_ONCE | EVRUN_NOWAIT))
+    activecnt /*还有监听的watcher*/
+    && !loop_done /*loop_done为EVBREAK_CANCEL*/
+    && !(flags & (EVRUN_ONCE | EVRUN_NOWAIT)) /*flag不能为(EVRUN_ONCE | EVRUN_NOWAIT)*/
   ));
 
-  if (loop_done == EVBREAK_ONE)
-    loop_done = EVBREAK_CANCEL;
+  if (loop_done == EVBREAK_ONE) // 如果只是break一次
+    loop_done = EVBREAK_CANCEL; // 现在可以恢复执行了
 
 #if EV_FEATURE_API
   --loop_depth;
@@ -3770,7 +3894,7 @@ ev_run (EV_P_ int flags)
   return activecnt;
 }
 
-/* 设置loop_done标志位 */
+/* 设置loop_done标志位，在loop过程中会检查该标志位，以决定是否退出 */
 void
 ev_break (EV_P_ int how) EV_THROW
 {
@@ -3862,7 +3986,7 @@ ev_clear_pending (EV_P_ void *w) EV_THROW
   if (expect_true (pending)) // 非0
     {
       ANPENDING *p = pendings [ABSPRI (w_)] + pending - 1;
-      p->w = (W)&pending_w; // 指向临时的pending watcher
+      p->w = (W)&pending_w; // 指向pending_w，代表为非法watcher，不应该调用
       w_->pending = 0;
       return p->events;
     }
@@ -3880,7 +4004,11 @@ pri_adjust (EV_P_ W w)
   ev_set_priority (w, pri);
 }
 
-/* 开始监听 watcher：设置标志位 */
+/**
+ * 开始监听 watcher：
+ * 1. 调整优先级
+ * 2. 设置标志位active，其实是对应数组的索引
+ * */
 inline_speed void
 ev_start (EV_P_ W w, int active)
 {
@@ -3889,7 +4017,7 @@ ev_start (EV_P_ W w, int active)
   ev_ref (EV_A);
 }
 
-/* 不监听 watcher：设置标志位 */
+/* 不监听 watcher：设置watcher的active标志位为0，减少loop的activecnt */
 inline_size void
 ev_stop (EV_P_ W w)
 {
@@ -4003,23 +4131,24 @@ ev_timer_again (EV_P_ ev_timer *w) EV_THROW
 {
   EV_FREQUENT_CHECK;
 
+  // timer 移出 pending
   clear_pending (EV_A_ (W)w);
 
-  if (ev_is_active (w))
+  if (ev_is_active (w)) // active
     {
       if (w->repeat)
         {
-          ev_at (w) = mn_now + w->repeat;
+          ev_at (w) = mn_now + w->repeat; // 更新下一次超时时间
           ANHE_at_cache (timers [ev_active (w)]);
-          adjustheap (timers, timercnt, ev_active (w));
+          adjustheap (timers, timercnt, ev_active (w)); // 调整timer堆
         }
-      else
+      else // 非repeat
         ev_timer_stop (EV_A_ w);
     }
-  else if (w->repeat)
+  else if (w->repeat) // 非active，但是repeat
     {
       ev_at (w) = w->repeat;
-      ev_timer_start (EV_A_ w);
+      ev_timer_start (EV_A_ w); // 重新start
     }
 
   EV_FREQUENT_CHECK;
@@ -4039,7 +4168,7 @@ ev_periodic_start (EV_P_ ev_periodic *w) EV_THROW
     return;
 
   if (w->reschedule_cb)
-    ev_at (w) = w->reschedule_cb (w, ev_rt_now);
+    ev_at (w) = w->reschedule_cb (w, ev_rt_now); // reschedule_cb决定下一次的超时时间
   else if (w->interval)
     {
       assert (("libev: ev_periodic_start called with negative interval value", w->interval >= 0.));
@@ -4050,12 +4179,12 @@ ev_periodic_start (EV_P_ ev_periodic *w) EV_THROW
 
   EV_FREQUENT_CHECK;
 
-  ++periodiccnt;
-  ev_start (EV_A_ (W)w, periodiccnt + HEAP0 - 1);
+  ++periodiccnt; // 增加periodic timer数量
+  ev_start (EV_A_ (W)w, periodiccnt + HEAP0 - 1); // 加入监听
   array_needsize (ANHE, periodics, periodicmax, ev_active (w) + 1, EMPTY2);
   ANHE_w (periodics [ev_active (w)]) = (WT)w;
   ANHE_at_cache (periodics [ev_active (w)]);
-  upheap (periodics, ev_active (w));
+  upheap (periodics, ev_active (w)); // 调整堆
 
   EV_FREQUENT_CHECK;
 
@@ -4071,6 +4200,7 @@ ev_periodic_stop (EV_P_ ev_periodic *w) EV_THROW
 
   EV_FREQUENT_CHECK;
 
+  // 从堆中移出timer
   {
     int active = ev_active (w);
 
@@ -4085,11 +4215,13 @@ ev_periodic_stop (EV_P_ ev_periodic *w) EV_THROW
       }
   }
 
+  // 停止监听watcher
   ev_stop (EV_A_ (W)w);
 
   EV_FREQUENT_CHECK;
 }
 
+// 再次监听periodic watcher
 void noinline
 ev_periodic_again (EV_P_ ev_periodic *w) EV_THROW
 {
@@ -4105,6 +4237,7 @@ ev_periodic_again (EV_P_ ev_periodic *w) EV_THROW
 
 #if EV_SIGNAL_ENABLE
 
+/* 开始监听signal watcher */
 void noinline
 ev_signal_start (EV_P_ ev_signal *w) EV_THROW
 {
@@ -4117,33 +4250,35 @@ ev_signal_start (EV_P_ ev_signal *w) EV_THROW
   assert (("libev: a signal must not be attached to two different loops",
            !signals [w->signum - 1].loop || signals [w->signum - 1].loop == loop));
 
-  signals [w->signum - 1].loop = EV_A;
+  signals [w->signum - 1].loop = EV_A; // 绑定loop
   ECB_MEMORY_FENCE_RELEASE;
 #endif
 
   EV_FREQUENT_CHECK;
 
 #if EV_USE_SIGNALFD
-  if (sigfd == -2)
+  if (sigfd == -2) // 只有支持signalfd和第一次初始化时才进入以下分支
     {
+      // 创建signalfd
       sigfd = signalfd (-1, &sigfd_set, SFD_NONBLOCK | SFD_CLOEXEC);
       if (sigfd < 0 && errno == EINVAL)
         sigfd = signalfd (-1, &sigfd_set, 0); /* retry without flags */
 
       if (sigfd >= 0)
         {
+          // 设置fd和sigfd_w
           fd_intern (sigfd); /* doing it twice will not hurt */
 
           sigemptyset (&sigfd_set);
 
-          ev_io_init (&sigfd_w, sigfdcb, sigfd, EV_READ);
+          ev_io_init (&sigfd_w, sigfdcb, sigfd, EV_READ); // 注册callback
           ev_set_priority (&sigfd_w, EV_MAXPRI);
           ev_io_start (EV_A_ &sigfd_w);
           ev_unref (EV_A); /* signalfd watcher should not keep loop alive */
         }
     }
 
-  if (sigfd >= 0)
+  if (sigfd >= 0) // 添加监听signum到signalfd
     {
       /* TODO: check .head */
       sigaddset (&sigfd_set, w->signum);
@@ -4153,12 +4288,12 @@ ev_signal_start (EV_P_ ev_signal *w) EV_THROW
     }
 #endif
 
-  ev_start (EV_A_ (W)w, 1);
-  wlist_add (&signals [w->signum - 1].head, (WL)w);
+  ev_start (EV_A_ (W)w, 1); // 设置watcher的active位为1
+  wlist_add (&signals [w->signum - 1].head, (WL)w); // 将watcher加入到signals的链表
 
   if (!((WL)w)->next)
 # if EV_USE_SIGNALFD
-    if (sigfd < 0) /*TODO*/
+    if (sigfd < 0) 不支持signal的话进入以下分支（异步）
 # endif
       {
 # ifdef _WIN32
@@ -4171,38 +4306,42 @@ ev_signal_start (EV_P_ ev_signal *w) EV_THROW
         evpipe_init (EV_A);
 
         sa.sa_handler = ev_sighandler;
-        sigfillset (&sa.sa_mask);
-        sa.sa_flags = SA_RESTART; /* if restarting works we save one iteration */
-        sigaction (w->signum, &sa, 0);
+        sigfillset (&sa.sa_mask); // 在信号处理函数执行期间阻塞所有其他信号
+        sa.sa_flags = SA_RESTART; /*让被信号中断的系统调用自动重启*/ /* if restarting works we save one iteration */
+        sigaction (w->signum, &sa, 0); // 注册信号处理函数
 
-        if (origflags & EVFLAG_NOSIGMASK)
-          {
-            sigemptyset (&sa.sa_mask);
-            sigaddset (&sa.sa_mask, w->signum);
-            sigprocmask (SIG_UNBLOCK, &sa.sa_mask, 0);
-          }
+        if (origflags & EVFLAG_NOSIGMASK) // EVFLAG_NOSIGMASK: 告诉 libev 不要修改进程的信号掩码 。
+        // 在多线程程序中，信号掩码会被 fork / pthread_create 继承，导致信号在某些线程中被阻塞，无法正常传递到 libev 的事件循环。 
+        {
+          sigemptyset (&sa.sa_mask); // 清空
+          sigaddset (&sa.sa_mask, w->signum); // 只加入 signum（如 SIGINT）
+          sigprocmask (SIG_UNBLOCK, &sa.sa_mask, 0);
+          //           ↑ 解除阻塞     ↑ 信号集     ↑ 旧的信号掩码（不关心）
+        }
 #endif
       }
 
   EV_FREQUENT_CHECK;
 }
 
+/* 停止监听signal watcher */
 void noinline
 ev_signal_stop (EV_P_ ev_signal *w) EV_THROW
 {
-  clear_pending (EV_A_ (W)w);
+  clear_pending (EV_A_ (W)w); // 清除watcher的pending位，使其不能被调度
   if (expect_false (!ev_is_active (w)))
     return;
 
   EV_FREQUENT_CHECK;
 
+  // 在signals的链表中删除watcher
   wlist_del (&signals [w->signum - 1].head, (WL)w);
   ev_stop (EV_A_ (W)w);
 
   if (!signals [w->signum - 1].head)
     {
 #if EV_MULTIPLICITY
-      signals [w->signum - 1].loop = 0; /* unattach from signal */
+      signals [w->signum - 1].loop = 0; /* unattach from signal */ /* 不在绑定loop */
 #endif
 #if EV_USE_SIGNALFD
       if (sigfd >= 0)
@@ -4218,7 +4357,7 @@ ev_signal_stop (EV_P_ ev_signal *w) EV_THROW
         }
       else
 #endif
-        signal (w->signum, SIG_DFL);
+        signal (w->signum, SIG_DFL); // 恢复信号的默认行为
     }
 
   EV_FREQUENT_CHECK;
@@ -4239,8 +4378,8 @@ ev_child_start (EV_P_ ev_child *w) EV_THROW
 
   EV_FREQUENT_CHECK;
 
-  ev_start (EV_A_ (W)w, 1);
-  wlist_add (&childs [w->pid & ((EV_PID_HASHSIZE) - 1)], (WL)w);
+  ev_start (EV_A_ (W)w, 1); // 设置watcher为活跃，并增加activecnt
+  wlist_add (&childs [w->pid & ((EV_PID_HASHSIZE) - 1)], (WL)w); // 将watcher加入到childs中
 
   EV_FREQUENT_CHECK;
 }
@@ -4248,13 +4387,13 @@ ev_child_start (EV_P_ ev_child *w) EV_THROW
 void
 ev_child_stop (EV_P_ ev_child *w) EV_THROW
 {
-  clear_pending (EV_A_ (W)w);
+  clear_pending (EV_A_ (W)w); // 清除watcher的pending位，使其不能被调度
   if (expect_false (!ev_is_active (w)))
     return;
 
   EV_FREQUENT_CHECK;
 
-  wlist_del (&childs [w->pid & ((EV_PID_HASHSIZE) - 1)], (WL)w);
+  wlist_del (&childs [w->pid & ((EV_PID_HASHSIZE) - 1)], (WL)w); // 从childs删除watcher
   ev_stop (EV_A_ (W)w);
 
   EV_FREQUENT_CHECK;
@@ -4269,9 +4408,9 @@ ev_child_stop (EV_P_ ev_child *w) EV_THROW
 #  define lstat(a,b) _stati64 (a,b)
 # endif
 
-#define DEF_STAT_INTERVAL  5.0074891
+#define DEF_STAT_INTERVAL  5.0074891 // 默认的检测文件stat的定时器间隔
 #define NFS_STAT_INTERVAL 30.1074891 /* for filesystems potentially failing inotify */
-#define MIN_STAT_INTERVAL  0.1074891
+#define MIN_STAT_INTERVAL  0.1074891 // 最小的检测文件stat的定时器间隔
 
 static void noinline stat_timer_cb (EV_P_ ev_timer *w_, int revents);
 
@@ -4283,12 +4422,13 @@ static void noinline stat_timer_cb (EV_P_ ev_timer *w_, int revents);
 static void noinline
 infy_add (EV_P_ ev_stat *w)
 {
+  // 添加监听
   w->wd = inotify_add_watch (fs_fd, w->path,
                              IN_ATTRIB | IN_DELETE_SELF | IN_MOVE_SELF | IN_MODIFY
                              | IN_CREATE | IN_DELETE | IN_MOVED_FROM | IN_MOVED_TO
-                             | IN_DONT_FOLLOW | IN_MASK_ADD);
+                             | IN_DONT_FOLLOW | IN_MASK_ADD); // IN_MASK_ADD 很关键：如果同一个路径被多个 watcher 监控，事件会 叠加 而不是覆盖。
 
-  if (w->wd >= 0)
+  if (w->wd >= 0) // 可以使用inotify
     {
       struct statfs sfs;
 
@@ -4297,6 +4437,7 @@ infy_add (EV_P_ ev_stat *w)
       /* also do poll on <2.6.25, but with normal frequency */
 
       if (!fs_2625)
+        // 内核 < 2.6.25，inotify 有 bug，必须轮询
         w->timer.repeat = w->interval ? w->interval : DEF_STAT_INTERVAL;
       else if (!statfs (w->path, &sfs)
                && (sfs.f_type == 0x1373 /* devfs */
@@ -4311,18 +4452,22 @@ infy_add (EV_P_ ev_stat *w)
                    || sfs.f_type == 0x52654973 /* reiser3 */
                    || sfs.f_type == 0x01021994 /* tmpfs */
                    || sfs.f_type == 0x58465342 /* xfs */))
+        // 本地文件系统，inotify 可靠，不需要轮询
         w->timer.repeat = 0.; /* filesystem is local, kernel new enough */
       else
+        // 远程文件系统（NFS 等），inotify 不可靠，低频轮询
         w->timer.repeat = w->interval ? w->interval : NFS_STAT_INTERVAL; /* remote, use reduced frequency */
     }
-  else
+  else // inotify不能使用
     {
       /* can't use inotify, continue to stat */
+      // inotify 不可用，回退到纯轮询
       w->timer.repeat = w->interval ? w->interval : DEF_STAT_INTERVAL;
 
       /* if path is not there, monitor some parent directory for speedup hints */
       /* note that exceeding the hardcoded path limit is not a correctness issue, */
       /* but an efficiency issue only */
+      // 如果路径不存在或无权限，尝试监控父目录
       if ((errno == ENOENT || errno == EACCES) && strlen (w->path) < 4096)
         {
           char path [4096];
@@ -4338,19 +4483,27 @@ infy_add (EV_P_ ev_stat *w)
               if (!pend || pend == path)
                 break;
 
-              *pend = 0;
+              *pend = 0; // 截断最后一个 '/'，得到父目录
               w->wd = inotify_add_watch (fs_fd, path, mask);
             }
           while (w->wd < 0 && (errno == ENOENT || errno == EACCES));
         }
     }
-
+  
+  // 添加到hash表
   if (w->wd >= 0)
     wlist_add (&fs_hash [w->wd & ((EV_INOTIFY_HASHSIZE) - 1)].head, (WL)w);
 
+  /*
+  - ev_timer_again ：重新设置并启动定时器
+  - ev_ref / ev_unref ：防止定时器阻止事件循环退出
+  - 启动前 ev_ref ：增加引用计数，防止事件循环退出
+  - 启动后 ev_unref ：减少引用计数，因为定时器是内部使用的，不应阻止退出
+  ev_ref / ev_unref 的作用 ：libev 的事件循环在没有任何活跃 watcher 时会自动退出。 ev_stat 的内部定时器不应该影响这个判断，所以用 ev_unref 抵消 ev_timer_again 带来的引用计数增加。
+  */
   /* now re-arm timer, if required */
   if (ev_is_active (&w->timer)) ev_ref (EV_A);
-  ev_timer_again (EV_A_ &w->timer);
+  ev_timer_again (EV_A_ &w->timer); // 只有设置了repeat才会Again
   if (ev_is_active (&w->timer)) ev_unref (EV_A);
 }
 
@@ -4363,6 +4516,7 @@ infy_del (EV_P_ ev_stat *w)
   if (wd < 0)
     return;
 
+  // 从hash表中删除watcher
   w->wd = -2;
   slot = wd & ((EV_INOTIFY_HASHSIZE) - 1);
   wlist_del (&fs_hash [slot].head, (WL)w);
@@ -4376,6 +4530,7 @@ infy_wd (EV_P_ int slot, int wd, struct inotify_event *ev)
 {
   if (slot < 0)
     /* overflow, need to check for all hash slots */
+    // 遍历hash表查找
     for (slot = 0; slot < (EV_INOTIFY_HASHSIZE); ++slot)
       infy_wd (EV_A_ slot, wd, ev);
   else
@@ -4396,7 +4551,7 @@ infy_wd (EV_P_ int slot, int wd, struct inotify_event *ev)
                   infy_add (EV_A_ w); /* re-add, no matter what */
                 }
 
-              stat_timer_cb (EV_A_ &w->timer, 0);
+              stat_timer_cb (EV_A_ &w->timer, 0); // 对比新旧stat
             }
         }
     }
@@ -4429,6 +4584,7 @@ ev_check_2625 (EV_P)
   fs_2625 = 1;
 }
 
+// 创建inotify的fd
 inline_size int
 infy_newfd (void)
 {
@@ -4443,25 +4599,27 @@ infy_newfd (void)
 inline_size void
 infy_init (EV_P)
 {
-  if (fs_fd != -2)
+  if (fs_fd != -2) // 不支持inotify 或者 已经初始化过了
     return;
 
   fs_fd = -1;
 
-  ev_check_2625 (EV_A);
+  ev_check_2625 (EV_A); // 检查linux版本
 
-  fs_fd = infy_newfd ();
+  fs_fd = infy_newfd (); // 创建inotify实例
 
   if (fs_fd >= 0)
     {
+      // 初始化fs_fd和fs_w，并加入监听
       fd_intern (fs_fd);
-      ev_io_init (&fs_w, infy_cb, fs_fd, EV_READ);
+      ev_io_init (&fs_w, infy_cb, fs_fd, EV_READ); // 注册读事件callback
       ev_set_priority (&fs_w, EV_MAXPRI);
       ev_io_start (EV_A_ &fs_w);
       ev_unref (EV_A);
     }
 }
 
+// 子进程执行（重新创建inotify的状态）
 inline_size void
 infy_fork (EV_P)
 {
@@ -4495,9 +4653,9 @@ infy_fork (EV_P)
 
           w->wd = -1;
 
-          if (fs_fd >= 0)
-            infy_add (EV_A_ w); /* re-add, no matter what */
-          else
+          if (fs_fd >= 0) // inotify 可用
+            infy_add (EV_A_ w); /* re-add, no matter what */ // 需要重新监听
+          else // inotify 不开用，使用轮询监听
             {
               w->timer.repeat = w->interval ? w->interval : DEF_STAT_INTERVAL;
               if (ev_is_active (&w->timer)) ev_ref (EV_A);
@@ -4516,22 +4674,27 @@ infy_fork (EV_P)
 # define EV_LSTAT(p,b) lstat (p, b)
 #endif
 
+// 获取文件元数据
 void
 ev_stat_stat (EV_P_ ev_stat *w) EV_THROW
 {
+  // 1. 使用 lstat 获取文件信息
   if (lstat (w->path, &w->attr) < 0)
+    // 2. 获取失败时，设置 st_nlink = 0 表示文件不存在
     w->attr.st_nlink = 0;
   else if (!w->attr.st_nlink)
+    // 3. 获取成功但 st_nlink == 0 时的特殊处理
     w->attr.st_nlink = 1;
 }
 
+// 文件状态数据的定时器回调：周期性更新文件stat
 static void noinline
 stat_timer_cb (EV_P_ ev_timer *w_, int revents)
 {
   ev_stat *w = (ev_stat *)(((char *)w_) - offsetof (ev_stat, timer));
 
-  ev_statdata prev = w->attr;
-  ev_stat_stat (EV_A_ w);
+  ev_statdata prev = w->attr; // 获取文件已保存的stat
+  ev_stat_stat (EV_A_ w);     // 获取最新的stat
 
   /* memcmp doesn't work on netbsd, they.... do stuff to their struct stat */
   if (
@@ -4546,11 +4709,11 @@ stat_timer_cb (EV_P_ ev_timer *w_, int revents)
     || prev.st_atime != w->attr.st_atime
     || prev.st_mtime != w->attr.st_mtime
     || prev.st_ctime != w->attr.st_ctime
-  ) {
+  ) { // 如果两个stat不一致
       /* we only update w->prev on actual differences */
       /* in case we test more often than invoke the callback, */
       /* to ensure that prev is always different to attr */
-      w->prev = prev;
+      w->prev = prev; // 保存prev
 
       #if EV_USE_INOTIFY
         if (fs_fd >= 0)
@@ -4561,21 +4724,25 @@ stat_timer_cb (EV_P_ ev_timer *w_, int revents)
           }
       #endif
 
+      // 且加入到pending队列等待调度
       ev_feed_event (EV_A_ w, EV_STAT);
     }
 }
 
+/* 开始监听stat watcher */
 void
 ev_stat_start (EV_P_ ev_stat *w) EV_THROW
 {
   if (expect_false (ev_is_active (w)))
     return;
 
+  // 获取文件stat
   ev_stat_stat (EV_A_ w);
 
   if (w->interval < MIN_STAT_INTERVAL && w->interval)
     w->interval = MIN_STAT_INTERVAL;
 
+  // 初始化定时器
   ev_timer_init (&w->timer, stat_timer_cb, 0., w->interval ? w->interval : DEF_STAT_INTERVAL);
   ev_set_priority (&w->timer, ev_priority (w));
 
@@ -4587,6 +4754,7 @@ ev_stat_start (EV_P_ ev_stat *w) EV_THROW
   else
 #endif
     {
+      // 调度repeat timer
       ev_timer_again (EV_A_ &w->timer);
       ev_unref (EV_A);
     }
@@ -4596,9 +4764,11 @@ ev_stat_start (EV_P_ ev_stat *w) EV_THROW
   EV_FREQUENT_CHECK;
 }
 
+/* 停止监听stat watcher */
 void
 ev_stat_stop (EV_P_ ev_stat *w) EV_THROW
 {
+  // 将watcher移出pending队列
   clear_pending (EV_A_ (W)w);
   if (expect_false (!ev_is_active (w)))
     return;
@@ -4609,6 +4779,7 @@ ev_stat_stop (EV_P_ ev_stat *w) EV_THROW
   infy_del (EV_A_ w);
 #endif
 
+  // stop timer
   if (ev_is_active (&w->timer))
     {
       ev_ref (EV_A);
@@ -4622,32 +4793,36 @@ ev_stat_stop (EV_P_ ev_stat *w) EV_THROW
 #endif
 
 #if EV_IDLE_ENABLE
+/* 开始监听idle watcher */
 void
 ev_idle_start (EV_P_ ev_idle *w) EV_THROW
 {
   if (expect_false (ev_is_active (w)))
     return;
 
+  // 调整优先级
   pri_adjust (EV_A_ (W)w);
 
   EV_FREQUENT_CHECK;
 
   {
-    int active = ++idlecnt [ABSPRI (w)];
+    int active = ++idlecnt [ABSPRI (w)]; // idles数组索引
 
     ++idleall;
     ev_start (EV_A_ (W)w, active);
 
     array_needsize (ev_idle *, idles [ABSPRI (w)], idlemax [ABSPRI (w)], active, EMPTY2);
-    idles [ABSPRI (w)][active - 1] = w;
+    idles [ABSPRI (w)][active - 1] = w; // 加入到idles数组
   }
 
   EV_FREQUENT_CHECK;
 }
 
+/* 停止监听idle watcher */
 void
 ev_idle_stop (EV_P_ ev_idle *w) EV_THROW
 {
+  // 移出pending队列
   clear_pending (EV_A_ (W)w);
   if (expect_false (!ev_is_active (w)))
     return;
@@ -4655,13 +4830,15 @@ ev_idle_stop (EV_P_ ev_idle *w) EV_THROW
   EV_FREQUENT_CHECK;
 
   {
-    int active = ev_active (w);
+    int active = ev_active (w); // 获取数组下标
 
+    // 将最后一个watcher挪到被删除的位置
     idles [ABSPRI (w)][active - 1] = idles [ABSPRI (w)][--idlecnt [ABSPRI (w)]];
+    // 设置watcher的active（数组索引）
     ev_active (idles [ABSPRI (w)][active - 1]) = active;
 
     ev_stop (EV_A_ (W)w);
-    --idleall;
+    --idleall; // 减少idle watcher的数量
   }
 
   EV_FREQUENT_CHECK;
@@ -4669,6 +4846,7 @@ ev_idle_stop (EV_P_ ev_idle *w) EV_THROW
 #endif
 
 #if EV_PREPARE_ENABLE
+/* 开始监听 prepare watcher */
 void
 ev_prepare_start (EV_P_ ev_prepare *w) EV_THROW
 {
@@ -4679,12 +4857,13 @@ ev_prepare_start (EV_P_ ev_prepare *w) EV_THROW
 
   ev_start (EV_A_ (W)w, ++preparecnt);
   array_needsize (ev_prepare *, prepares, preparemax, preparecnt, EMPTY2);
-  prepares [preparecnt - 1] = w;
+  prepares [preparecnt - 1] = w; // 加入到prepares数组
 
   EV_FREQUENT_CHECK;
 }
 
 void
+/* 停止监听 prepare watcher */
 ev_prepare_stop (EV_P_ ev_prepare *w) EV_THROW
 {
   clear_pending (EV_A_ (W)w);
@@ -4694,6 +4873,7 @@ ev_prepare_stop (EV_P_ ev_prepare *w) EV_THROW
   EV_FREQUENT_CHECK;
 
   {
+    // 将w挪出prepares，并用最后一个watcher补上空缺位置
     int active = ev_active (w);
 
     prepares [active - 1] = prepares [--preparecnt];
@@ -4707,6 +4887,7 @@ ev_prepare_stop (EV_P_ ev_prepare *w) EV_THROW
 #endif
 
 #if EV_CHECK_ENABLE
+/* 开始监听 check watcher */
 void
 ev_check_start (EV_P_ ev_check *w) EV_THROW
 {
@@ -4722,6 +4903,7 @@ ev_check_start (EV_P_ ev_check *w) EV_THROW
   EV_FREQUENT_CHECK;
 }
 
+/* 停止监听 check watcher */
 void
 ev_check_stop (EV_P_ ev_check *w) EV_THROW
 {
@@ -4745,6 +4927,10 @@ ev_check_stop (EV_P_ ev_check *w) EV_THROW
 #endif
 
 #if EV_EMBED_ENABLE
+/**
+ * 手动处理 other loop 的待处理事件
+ * 一般在embed watcher的回调中调用
+ */
 void noinline
 ev_embed_sweep (EV_P_ ev_embed *w) EV_THROW
 {
@@ -4757,14 +4943,16 @@ embed_io_cb (EV_P_ ev_io *io, int revents)
   ev_embed *w = (ev_embed *)(((char *)io) - offsetof (ev_embed, io));
 
   if (ev_cb (w))
-    ev_feed_event (EV_A_ (W)w, EV_EMBED);
+    ev_feed_event (EV_A_ (W)w, EV_EMBED); // 通知用户回调
   else
-    ev_run (w->other, EVRUN_NOWAIT);
+    ev_run (w->other, EVRUN_NOWAIT); // 调用 loop 循环一次，执行other loop的就绪watcher
 }
 
+// 检查other loop中是否有fd变更
 static void
 embed_prepare_cb (EV_P_ ev_prepare *prepare, int revents)
 {
+  // 根据ev_prepare指针获取ev_embed指针
   ev_embed *w = (ev_embed *)(((char *)prepare) - offsetof (ev_embed, prepare));
 
   {
@@ -4783,16 +4971,19 @@ embed_fork_cb (EV_P_ ev_fork *fork_w, int revents)
 {
   ev_embed *w = (ev_embed *)(((char *)fork_w) - offsetof (ev_embed, fork));
 
+  // 先解除嵌入关系
   ev_embed_stop (EV_A_ w);
 
   {
+    // 在other loop中重新建立内核状态
     EV_P = w->other;
 
     ev_loop_fork (EV_A);
-    ev_run (EV_A_ EVRUN_NOWAIT);
+    ev_run (EV_A_ EVRUN_NOWAIT); // 初始化
   }
 
-  ev_embed_start (EV_A_ w);
+  // 在parent loop重新启动ev_embed
+  ev_embed_start (EV_A_ w); // 重新建立嵌入关系
 }
 
 #if 0
@@ -4812,18 +5003,29 @@ ev_embed_start (EV_P_ ev_embed *w) EV_THROW
   {
     EV_P = w->other;
     assert (("libev: loop to be embedded is not embeddable", backend & ev_embeddable_backends ()));
-    ev_io_init (&w->io, embed_io_cb, backend_fd, EV_READ);
   }
 
   EV_FREQUENT_CHECK;
 
-  ev_set_priority (&w->io, ev_priority (w));
-  ev_io_start (EV_A_ &w->io);
+  {
+    EV_P = w->other; // 获取other loop
+    if (backend_fd >= 0)
+      {
+        // 启动other loop的io watcher
+        // 回调：embed_io_cb
+        ev_io_init (&w->io, embed_io_cb, backend_fd, EV_READ);
+        ev_set_priority (&w->io, ev_priority (w));
+        ev_io_start (EV_A_ &w->io);
+      }
+  }
 
+  // 在parent loop中启动prepare watcher
+  // 回调：embed_prepare_cb
   ev_prepare_init (&w->prepare, embed_prepare_cb);
   ev_set_priority (&w->prepare, EV_MINPRI);
-  ev_prepare_start (EV_A_ &w->prepare);
+  ev_prepare_start (EV_A_ &w->prepare); // 每次parent loop迭代前，检查other loop的fd是否需要变更
 
+  // 在parent loop中启动fork watcher
   ev_fork_init (&w->fork, embed_fork_cb);
   ev_fork_start (EV_A_ &w->fork);
 
@@ -4843,7 +5045,8 @@ ev_embed_stop (EV_P_ ev_embed *w) EV_THROW
 
   EV_FREQUENT_CHECK;
 
-  ev_io_stop      (EV_A_ &w->io);
+  if (w->io.fd >= 0)
+    ev_io_stop      (EV_A_ &w->io);
   ev_prepare_stop (EV_A_ &w->prepare);
   ev_fork_stop    (EV_A_ &w->fork);
 
@@ -4854,6 +5057,7 @@ ev_embed_stop (EV_P_ ev_embed *w) EV_THROW
 #endif
 
 #if EV_FORK_ENABLE
+// 开始监听fork watcher
 void
 ev_fork_start (EV_P_ ev_fork *w) EV_THROW
 {
@@ -4869,6 +5073,7 @@ ev_fork_start (EV_P_ ev_fork *w) EV_THROW
   EV_FREQUENT_CHECK;
 }
 
+// 停止监听fork watcher
 void
 ev_fork_stop (EV_P_ ev_fork *w) EV_THROW
 {
@@ -4892,6 +5097,7 @@ ev_fork_stop (EV_P_ ev_fork *w) EV_THROW
 #endif
 
 #if EV_CLEANUP_ENABLE
+// 开始监听cleanup watcher 
 void
 ev_cleanup_start (EV_P_ ev_cleanup *w) EV_THROW
 {
@@ -4909,6 +5115,7 @@ ev_cleanup_start (EV_P_ ev_cleanup *w) EV_THROW
   EV_FREQUENT_CHECK;
 }
 
+// 停止监听cleanup watcher
 void
 ev_cleanup_stop (EV_P_ ev_cleanup *w) EV_THROW
 {
@@ -4933,6 +5140,7 @@ ev_cleanup_stop (EV_P_ ev_cleanup *w) EV_THROW
 #endif
 
 #if EV_ASYNC_ENABLE
+// 开始监听async watcher（加入asyncs数组）
 void
 ev_async_start (EV_P_ ev_async *w) EV_THROW
 {
@@ -4952,6 +5160,7 @@ ev_async_start (EV_P_ ev_async *w) EV_THROW
   EV_FREQUENT_CHECK;
 }
 
+// 停止监听async watcher（移出asyncs数组）
 void
 ev_async_stop (EV_P_ ev_async *w) EV_THROW
 {
@@ -4973,16 +5182,18 @@ ev_async_stop (EV_P_ ev_async *w) EV_THROW
   EV_FREQUENT_CHECK;
 }
 
+// 触发async watcher（需要用户手动触发）
 void
 ev_async_send (EV_P_ ev_async *w) EV_THROW
 {
-  w->sent = 1;
+  w->sent = 1; // 标志该async watcher发送了事件通知
   evpipe_write (EV_A_ &async_pending);
 }
 #endif
 
 /*****************************************************************************/
 
+// 只执行一次（ev_io和ev_timer）
 struct ev_once
 {
   ev_io io;
@@ -4997,13 +5208,16 @@ once_cb (EV_P_ struct ev_once *once, int revents)
   void (*cb)(int revents, void *arg) = once->cb;
   void *arg = once->arg;
 
+  // 停止 io、timer，释放空间
   ev_io_stop    (EV_A_ &once->io);
   ev_timer_stop (EV_A_ &once->to);
   ev_free (once);
 
+  // 调用callback
   cb (revents, arg);
 }
 
+// ev_io callback封装
 static void
 once_cb_io (EV_P_ ev_io *w, int revents)
 {
@@ -5012,6 +5226,7 @@ once_cb_io (EV_P_ ev_io *w, int revents)
   once_cb (EV_A_ once, revents | ev_clear_pending (EV_A_ &once->to));
 }
 
+// ev_timer callback封装
 static void
 once_cb_to (EV_P_ ev_timer *w, int revents)
 {
@@ -5020,36 +5235,37 @@ once_cb_to (EV_P_ ev_timer *w, int revents)
   once_cb (EV_A_ once, revents | ev_clear_pending (EV_A_ &once->io));
 }
 
+// 可以单独设置fd或timeout，也可以一起设置
 void
 ev_once (EV_P_ int fd, int events, ev_tstamp timeout, void (*cb)(int revents, void *arg), void *arg) EV_THROW
 {
   struct ev_once *once = (struct ev_once *)ev_malloc (sizeof (struct ev_once));
 
-  if (expect_false (!once))
-    {
-      cb (EV_ERROR | EV_READ | EV_WRITE | EV_TIMER, arg);
-      return;
-    }
+  if (expect_false (!once)) // malloc失败，直接调用callback（revents包括EV_ERROR），意味着写callback需要考虑EV_ERROR这种情况
+  {
+    cb (EV_ERROR | EV_READ | EV_WRITE | EV_TIMER, arg);
+    return;
+  }
 
   once->cb  = cb;
   once->arg = arg;
 
   ev_init (&once->io, once_cb_io);
   if (fd >= 0)
-    {
-      ev_io_set (&once->io, fd, events);
-      ev_io_start (EV_A_ &once->io);
-    }
+  {
+    ev_io_set (&once->io, fd, events);
+    ev_io_start (EV_A_ &once->io);
+  }
 
   ev_init (&once->to, once_cb_to);
   if (timeout >= 0.)
-    {
-      ev_timer_set (&once->to, timeout, 0.);
-      ev_timer_start (EV_A_ &once->to);
-    }
+  {
+    ev_timer_set (&once->to, timeout, 0.);
+    ev_timer_start (EV_A_ &once->to);
+  }
 }
 
-/*****************************************************************************/
+/*********************************** 未使用的feature *****************************************/
 
 #if EV_WALK_ENABLE
 void ecb_cold
